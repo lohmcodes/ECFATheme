@@ -1,5 +1,5 @@
 -- -----------------------------------------------------------------------
--- Waterfall lifebars (ported from Waterfall Expanded by SteveReen and Zarzob).
+-- Waterfall lifebars.
 --
 -- Three lifebars run at the same time: Easy, Normal and Hard. They react to
 -- each judgment (and Easy/Normal slowly regenerate when low). A player fails

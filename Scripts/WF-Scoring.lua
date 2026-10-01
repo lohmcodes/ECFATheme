@@ -1,5 +1,5 @@
 -- -----------------------------------------------------------------------
--- Waterfall scoring helpers (ported from Waterfall Expanded).
+-- Waterfall scoring helpers.
 --
 -- The engine judges with Waterfall's windows (SL.Preferences.Waterfall), and its
 -- percent dance points are the Waterfall score. On top of that this file tracks:
@@ -44,15 +44,15 @@ WF.InitScoring = function()
 end
 
 -- The ITG judgment for an engine judgment, as an ex_counts key:
--- "W0" (Fantastic within 15ms), "W1".."W5", "Miss", "HitMine", "Held" or "LetGo".
+-- "W0" (Fantastic within 15ms), "W1".."W5", "Miss", "HitMine", "Held" or "LetGo",
+-- or "MissedHold" (a hold whose head was missed: scored like LetGo, but costs no life).
 -- Returns nil for judgments that don't count (dodged mines and the like).
 -- Hits outside Waterfall's 160ms Fault window are already misses, so ITG's
 -- widest window (181.5ms) is approximated.
 WF.SimulateITGJudgment = function(params)
 	if params.HoldNoteScore then
 		local hns = ToEnumShortString(params.HoldNoteScore)
-		if hns == "Held" then return "Held" end
-		if hns == "LetGo" or hns == "MissedHold" then return "LetGo" end
+		if hns == "Held" or hns == "LetGo" or hns == "MissedHold" then return hns end
 		return nil
 	end
 	if not params.TapNoteScore then return nil end
@@ -130,18 +130,25 @@ end
 
 -- Clear type (index into WF.ClearTypes) of player's current stage.
 -- Full combo tiers come from the judgments; otherwise the hardest lifebar left.
+-- A play that didn't judge every note (the player gave up) is a Fail.
 WF.GetClearType = function(player)
 	local pn = tonumber(ToEnumShortString(player):sub(-1))
-	local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats(player)
-	if pss:GetFailed() then return #WF.ClearTypes end
+	local stage = STATSMAN:GetCurStageStats()
+	local pss = stage:GetPlayerStageStats(player)
+	if pss:GetFailed() or stage:GaveUp() then return #WF.ClearTypes end
 
 	local tap = function(w) return pss:GetTapNoteScores("TapNoteScore_"..w) end
 	local hold = function(w) return pss:GetHoldNoteScores("HoldNoteScore_"..w) end
+	local radar = pss:GetRadarPossible()
 	local judged = tap("W1") + tap("W2") + tap("W3") + tap("W4") + tap("W5") + tap("Miss")
-	local possible = pss:GetRadarPossible():GetValue("RadarCategory_TapsAndHolds")
+	local holds_judged = hold("Held") + hold("LetGo") + hold("MissedHold")
+	if judged < radar:GetValue("RadarCategory_TapsAndHolds")
+	or holds_judged < radar:GetValue("RadarCategory_Holds") + radar:GetValue("RadarCategory_Rolls") then
+		return #WF.ClearTypes
+	end
 	local broken = tap("W5") > 0 or tap("Miss") > 0 or tap("HitMine") > 0 or hold("LetGo") > 0 or hold("MissedHold") > 0
 
-	if judged == possible and not broken then
+	if not broken then
 		for i = 4, 2, -1 do
 			if tap("W"..i) > 0 then return i end
 		end
