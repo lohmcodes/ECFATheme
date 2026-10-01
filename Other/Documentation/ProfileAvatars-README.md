@@ -1,6 +1,6 @@
 # Profile Avatars
 
-Starting with v4.9, Simply Love supports profile avatars.
+The theme supports profile avatars.
 
 ![Profile Avatars](https://i.imgur.com/ygMEo5sh.png)
 
@@ -54,7 +54,7 @@ In each of these paths, <code>USERNAME</code> will be your OS username and <code
 
 ## Recommendations
 
-Avatars in Simply Love should be square.  Non-square images will be squished to fit a 1:1 aspect ratio.
+Avatars should be square.  Non-square images will be squished to fit a 1:1 aspect ratio.
 
 Transparency in png files is supported.
 
@@ -62,4 +62,4 @@ Animated gifs and video files are not supported.
 
 ## Compatibility
 
-If you've used Hayoreo's [Digital Dance](https://github.com/Hayoreo/digital-dance/) theme, you might already have an image in your profile folder titled `Profile Picture.png`.  Simply Love supports this; there's no need to rename it.
+If you already have an image in your profile folder titled `Profile Picture.png` (some other themes use that name), it's supported too; there's no need to rename it.

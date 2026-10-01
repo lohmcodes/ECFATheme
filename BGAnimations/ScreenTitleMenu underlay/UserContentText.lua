@@ -63,12 +63,6 @@ end
 
 -- build a 3-line string to display info about this version of SL, this version of SM, and installed song content
 local GetText = function()
-	local newer_sl_exists = false
-	local sl_parts = GetVersionParts(sl_version:match("^(%S+)"))
-	if SL.Global.SimplyLoveLatestVersion then
-		newer_sl_exists = IsNewer(SL.Global.SimplyLoveLatestVersion, sl_parts)
-	end
-
 	local newer_itgmania_exists = false
 	local itgmania_parts = GetProductVersion()
 	if SL.Global.ITGmaniaLatestVersion then
@@ -76,8 +70,8 @@ local GetText = function()
 	end
 
 
-	local text = ("%s%s%s\n%s%s\n%s"):format(
-		sl_name,  (sl_version and (" v" .. sl_version) or ""), (newer_sl_exists and " ("..table.concat(SL.Global.SimplyLoveLatestVersion, ".").." Available📥)" or ""),
+	local text = ("%s%s\n%s%s\n%s"):format(
+		sl_name,  (sl_version and (" v" .. sl_version) or ""),
 		sm_version, (newer_itgmania_exists and " (" .. table.concat(SL.Global.ITGmaniaLatestVersion, ".") .." Available📥)" or ""),
 		song_stats
 	)

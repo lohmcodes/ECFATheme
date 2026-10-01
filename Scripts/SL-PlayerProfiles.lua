@@ -153,6 +153,10 @@ local permitted_profile_settings = {
 
 local theme_name = THEME:GetThemeDisplayName()
 local filename =  theme_name .. " UserPrefs.ini"
+-- Profiles that haven't saved settings under this theme's name yet fall back to
+-- the settings saved under the theme's previous name, so players keep them.
+local previous_theme_name = "Simply Love"
+local previous_filename = previous_theme_name .. " UserPrefs.ini"
 
 
 -- Function called when a [GUEST] joins during SSM, either by late joining or via the fast
@@ -173,6 +177,10 @@ end
 -- function assigned to "CustomLoadFunction" under [Profile] in metrics.ini
 LoadProfileCustom = function(profile, dir)
 	local path =  dir .. filename
+	local section = theme_name
+	if not FILEMAN:DoesFileExist(path) and FILEMAN:DoesFileExist(dir .. previous_filename) then
+		path, section = dir .. previous_filename, previous_theme_name
+	end
 	local player, pn, filecontents
 
 	-- we've been passed a profile object as the variable "profile"
@@ -197,7 +205,7 @@ LoadProfileCustom = function(profile, dir)
 	end
 
 	if pn and FILEMAN:DoesFileExist(path) then
-		filecontents = IniFile.ReadFile(path)[theme_name]
+		filecontents = IniFile.ReadFile(path)[section] or {}
 
 		-- for each key/value pair read in from the player's profile
 		for k,v in pairs(filecontents) do

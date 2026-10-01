@@ -43,7 +43,13 @@ return Def.Actor{
 			Miss = pss:GetTapNoteScores(TNSTypes[6])
 		}
 		
-		if (mods.ShowFaPlusWindow and mods.ShowFaPlusPane) or mods.ShowExScore then
+		if SL.Global.GameMode == "Waterfall" and ((mods.ShowFaPlusWindow and mods.ShowFaPlusPane) or mods.ShowExScore) then
+			-- split the engine's Masterfuls at the FA+ window (12.5ms, or 10ms with SmallerWhite)
+			local split = WF.FAPlusCount[tonumber(pn:sub(-1))][mods.SmallerWhite and 1 or 2]
+			storage.judgments.W0 = split
+			storage.judgments.W1 = storage.judgments.W1 - split
+			storage.showex = mods.ShowExScore
+		elseif (mods.ShowFaPlusWindow and mods.ShowFaPlusPane) or mods.ShowExScore then
 			local counts = GetExJudgmentCounts(player)
 			storage.judgments.W0 = counts.W0
 			storage.judgments.W1 = counts.W1

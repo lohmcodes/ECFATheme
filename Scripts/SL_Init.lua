@@ -269,7 +269,7 @@ SL = {
 	},
 	-- These judgment colors are used for text & numbers on dark backgrounds:
 	JudgmentColors = {
-		-- Waterfall judgments: Masterful, Awesome, Solid, OK, Fault, Miss (from Waterfall Expanded)
+		-- Waterfall judgments: Masterful, Awesome, Solid, OK, Fault, Miss
 		Waterfall = {
 			color("#FF00BE"),	-- fuchsia
 			color("#FFFF00"),	-- yellow
@@ -307,9 +307,9 @@ SL = {
 		},
 	},
 	-- Engine Preferences applied for each game mode (see SetGameModePreferences()).
-	-- Plays are judged with Waterfall timing (from Waterfall Expanded, as used by
-	-- ECFA 2021). The ITG and FA+ tables are never applied any more: they're kept
-	-- as reference data for the simulated ITG/EX scores and timing displays.
+	-- Plays are judged with Waterfall timing (as used by ECFA 2021). The ITG and
+	-- FA+ tables are never applied: they're kept as reference data for the
+	-- simulated ITG/EX scores and timing displays.
 	Preferences = {
 		Waterfall = {
 			TimingWindowAdd=0,
@@ -595,14 +595,17 @@ SL = {
 		RequestCache = {},
 	},
 
-	-- Latest versions available for ITGmania and Simply Love.
+	-- Latest version available for ITGmania.
 	ITGmaniaLatestVersion = nil,
-	SimplyLoveLatestVersion = nil,
 }
 
--- Casual mode plays with Waterfall timing and scoring too; it only differs in
--- presentation (simplified song select, no lifebar).
-SL.Preferences.Casual = SL.Preferences.Waterfall
+-- Casual mode plays with Waterfall timing and scoring too, but with only three
+-- judgments (OK and Fault are turned off), so Solid stretches to cover OK's window.
+-- It also has a simplified song select and no lifebar.
+SL.Preferences.Casual = {}
+for key, value in pairs(SL.Preferences.Waterfall) do SL.Preferences.Casual[key] = value end
+SL.Preferences.Casual.TimingWindowSecondsW3 = SL.Preferences.Waterfall.TimingWindowSecondsW4
+SL.Preferences.Casual.TimingWindowSecondsW5 = SL.Preferences.Waterfall.TimingWindowSecondsW4
 SL.JudgmentColors.Casual = SL.JudgmentColors.Waterfall
 for key, value in pairs(SL.Metrics.Waterfall) do
 	if not key:match("^LifePercentChange") then SL.Metrics.Casual[key] = value end

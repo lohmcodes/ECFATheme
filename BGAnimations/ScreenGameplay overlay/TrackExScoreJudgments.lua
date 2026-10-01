@@ -77,7 +77,10 @@ return Def.Actor{
 			if not key then return end
 			local count_updated = false
 			if not WF.ITGFailed[pnum] then
-				if key == "W0" or key == "W1" then
+				if key == "MissedHold" then
+					-- scored like a dropped hold (UpdateITGLife ignores it: no life change)
+					storage.ex_counts.LetGo = storage.ex_counts.LetGo + 1
+				elseif key == "W0" or key == "W1" then
 					local offset = math.abs(params.TapNoteOffset)
 					if key == "W0" then storage.ex_counts.W0 = storage.ex_counts.W0 + 1 else storage.ex_counts.W1 = storage.ex_counts.W1 + 1 end
 					-- Hard EX splits Fantastics at 10ms instead

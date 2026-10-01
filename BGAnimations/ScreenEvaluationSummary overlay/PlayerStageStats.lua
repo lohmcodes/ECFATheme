@@ -13,6 +13,11 @@ local Colors = {
 			SL.JudgmentColors["ITG"][5], 
 			SL.JudgmentColors["ITG"][6],
 		}
+-- Waterfall judgments; W0/W1 are Masterfuls inside/outside the FA+ window (see Storage.lua)
+if SL.Global.GameMode ~= "Casual" then
+	local wf = SL.JudgmentColors.Waterfall
+	Colors = { wf[1], lerp_color(0.5, wf[1], Color.White), wf[2], wf[3], wf[4], wf[5], wf[6] }
+end
 
 -- variables for positioning and horizalign, dependent on playernumber
 local col1x, col2x, gradex, align1, align2

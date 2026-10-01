@@ -31,8 +31,7 @@ af2.OffCommand=function(self) self:smooth(0.65):diffusealpha(0) end
 af2.Name="SLInfo"
 
 
--- the big blocky Wendy text that says SIMPLY LOVE (or SIMPLY THONK, or SIMPLY DUCKS, etc.)
--- and the arrows graphic that appears between the two words
+-- the ECFA logo
 af2[#af2+1] = LoadActor("./Logo.lua")
 
 -- 3 lines of text:
@@ -59,7 +58,6 @@ af2[#af2+1] = Def.ActorFrame{
 	OnCommand=function(self)
 		local url = "https://www.itgmania.com/api/versions.json"
 		if (SL.Global.ITGmaniaLatestVersion == nil and
-		    SL.Global.SimplyLoveLatestVersion == nil and
 				NETWORK:IsUrlAllowed(url)) then
 			NETWORK:HttpRequest{
 				url=url,
@@ -67,10 +65,8 @@ af2[#af2+1] = Def.ActorFrame{
 					if response.statusCode == 200 then
 						local versions = JsonDecode(response["body"])
 						local itgmania_version = versions["itgmania_version"]
-						local simply_love_version = versions["simply_love_version"]
 
 						SL.Global.ITGmaniaLatestVersion = GetVersionParts(itgmania_version)
-						SL.Global.SimplyLoveLatestVersion = GetVersionParts(simply_love_version)
 
 						MESSAGEMAN:Broadcast("VersionCheck")
 					end

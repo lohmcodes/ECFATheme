@@ -381,8 +381,9 @@ SL_CustomPrefs.Get = function()
 		},
 		ITGDiffColors =
 		{
-			Default = "Simply Love",
-			Choices = { "Simply Love", "ITG", "DDR" }
+			-- "Theme" uses the theme's own colors; only "ITG" and "DDR" change them (SL-Colors.lua).
+			Default = "Theme",
+			Choices = { "Theme", "ITG", "DDR" }
 		},
 		SongSelectBG =
 		{

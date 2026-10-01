@@ -4,7 +4,7 @@ If your judgment distribution graph on Screen Evaluation has multiple individual
 
 ![spiky boi](https://i.imgur.com/ay1G6rml.png)
 
-Fixing this is outside the scope of Simply Love as a StepMania theme.  You may need to install drivers for your OS, modify hardware inside your dance pad, or both.
+Fixing this is outside the scope of a StepMania theme.  You may need to install drivers for your OS, modify hardware inside your dance pad, or both.
 
 # Modifying L-Tek Dance Pad Hardware
 

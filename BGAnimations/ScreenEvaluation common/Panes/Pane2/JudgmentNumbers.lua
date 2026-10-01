@@ -102,6 +102,14 @@ for i=1,#TapNoteScores.Types do
 end
 
 -- then handle hands/ex, holds, mines, rolls
+-- The "ITG" number: the simulated ITG score in Waterfall mode (this pane shows the
+-- simulated ITG/EX play there), otherwise the engine's own percent.
+local ITGPercent = function()
+	if SL.Global.GameMode == "Waterfall" then return CalculateSimulatedITGScore(player) end
+	local formatted = FormatPercentScore(pss:GetPercentDancePoints()):gsub("%%", "")
+	return tonumber(formatted)
+end
+
 for index, RCType in ipairs(RadarCategories.Types) do
   -- Behavior
 	-- If ShowExScore and not ShowHardEXScore - show ITG score in white 
@@ -111,17 +119,10 @@ for index, RCType in ipairs(RadarCategories.Types) do
 	local percentHardEX = nil
 
 	if SL[pn].ActiveModifiers.ShowExScore and SL[pn].ActiveModifiers.ShowHardEXScore then
-		local PercentDP = pss:GetPercentDancePoints()
-		percent = FormatPercentScore(PercentDP):gsub("%%", "")
-		-- Format the Percentage string, removing the % symbol
-		percent = tonumber(percent)
-
+		percent = ITGPercent()
 		percentHardEX = CalculateHardExScore(player, counts)
 	elseif SL[pn].ActiveModifiers.ShowExScore then
-		local PercentDP = pss:GetPercentDancePoints()
-		percent = FormatPercentScore(PercentDP):gsub("%%", "")
-		-- Format the Percentage string, removing the % symbol
-		percent = tonumber(percent)
+		percent = ITGPercent()
 	else
 		percent = CalculateExScore(player)
 	end

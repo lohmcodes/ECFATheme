@@ -92,6 +92,11 @@ local RetrieveProfileData = function(dir)
 	if FILEMAN:DoesFileExist(path) then
 		return IniFile.ReadFile(path)[theme_name]
 	end
+	-- settings saved under the theme's previous name (see Scripts/SL-PlayerProfiles.lua)
+	path = dir .. "Simply Love UserPrefs.ini"
+	if FILEMAN:DoesFileExist(path) then
+		return IniFile.ReadFile(path)["Simply Love"]
+	end
 	return false
 end
 

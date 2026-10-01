@@ -17,6 +17,27 @@ local AwardMap = {
 
 local ClearLamp = { color("#0000CC"), color("#990000") }
 
+-- Whether a Waterfall score judged every note. A score saved from a play the player
+-- gave up on judged fewer notes than the chart has, so its percentage (out of the
+-- whole chart) is lower than the percentage of the notes it did judge.
+local IsCompleteScore = function(score)
+	local m = SL.Metrics.Waterfall
+	local points, possible = 0, 0
+	for w in ivalues({ "W1", "W2", "W3", "W4", "W5", "Miss" }) do
+		local n = score:GetTapNoteScore("TapNoteScore_"..w)
+		points = points + n * m["PercentScoreWeight"..w]
+		possible = possible + n * m.PercentScoreWeightW1
+	end
+	for h in ivalues({ "Held", "LetGo", "MissedHold" }) do
+		local n = score:GetHoldNoteScore("HoldNoteScore_"..h)
+		if h == "Held" then points = points + n * m.PercentScoreWeightHeld end
+		possible = possible + n * m.PercentScoreWeightHeld
+	end
+	points = points + score:GetTapNoteScore("TapNoteScore_HitMine") * m.PercentScoreWeightHitMine
+	if possible <= 0 then return false end
+	return math.abs(math.max(0, points / possible) - score:GetPercentDP()) <= 0.0001
+end
+
 local function GetLamp(high_score_list)
 	-- If no scores then just return.
 	if high_score_list == nil or #high_score_list:GetHighScores() == 0 then
@@ -44,7 +65,7 @@ local function GetLamp(high_score_list)
 					score:GetTapNoteScore("TapNoteScore_HitMine")
 			if misses + score:GetTapNoteScore("TapNoteScore_W5") > 0 then
 				award = nil
-			elseif award == nil then
+			elseif award == nil and IsCompleteScore(score) then
 				award = "StageAward_FullComboW4"
 			end
 		end

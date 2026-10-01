@@ -113,6 +113,8 @@ local BuildSubmission = function(player, packInfo, songInfo)
 	local _, valid, _ = ValidForECFACloud(player)
 	local stats = STATSMAN:GetCurStageStats():GetPlayerStageStats(player)
 	if not valid or stats:GetFailed() then return nil end
+	-- Only complete passes count: a play the player gave up on is a Fail.
+	if WF.GetClearType(player) == #WF.ClearTypes then return nil end
 
 	-- The hash is normally computed in Select Music; make sure we have it.
 	if SL[pn].Streams.Hash == "" then

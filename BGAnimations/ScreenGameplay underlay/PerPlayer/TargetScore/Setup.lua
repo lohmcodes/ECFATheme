@@ -25,7 +25,23 @@ local GetTopScore = function(kind)
 	if scorelist then
 		local topscore = scorelist:GetHighScores()[1]
 		if topscore then
-			if SL[pn].ActiveModifiers.ShowExScore then
+			if SL[pn].ActiveModifiers.ShowExScore and SL.Global.GameMode == "Waterfall" then
+				-- Saved scores hold Waterfall judgments, so estimate their EX score window by
+				-- window: Masterful (15ms) is exactly EX's Fantastic+ window, and Awesome, Solid
+				-- and OK roughly correspond to Fantastic, Excellent and Great.
+				local counts = {}
+				counts["W0"] = topscore:GetTapNoteScore("TapNoteScore_W1")
+				counts["W1"] = topscore:GetTapNoteScore("TapNoteScore_W2")
+				counts["W2"] = topscore:GetTapNoteScore("TapNoteScore_W3")
+				counts["W3"] = topscore:GetTapNoteScore("TapNoteScore_W4")
+				counts["W4"] = topscore:GetTapNoteScore("TapNoteScore_W5")
+				counts["W5"] = 0
+				counts["Miss"] = topscore:GetTapNoteScore("TapNoteScore_Miss")
+				counts["HitMine"] = topscore:GetTapNoteScore("TapNoteScore_HitMine")
+				counts["Held"] = topscore:GetHoldNoteScore("HoldNoteScore_Held")
+				ex_score, ex_points, ex_possible = CalculateExScore(player, counts)
+				return (ex_score/100)
+			elseif SL[pn].ActiveModifiers.ShowExScore then
 				local counts = {}
 				counts["W0"] = topscore:GetTapNoteScore("TapNoteScore_W1") - topscore:GetScore()
 				counts["W1"] = topscore:GetScore()

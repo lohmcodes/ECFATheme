@@ -33,8 +33,9 @@ local Update = function(self)
 	swoosh:texcoordvelocity(velocity, 0)
 end
 
+-- zoomtowidth (not zoomx): the fill is a 1px quad but the swoosh is a 128px texture
 local Resize = function(self, life)
-	self:finishtweening():decelerate(0.1):zoomx(w * life / max)
+	self:finishtweening():decelerate(0.1):zoomtowidth(w * life / max)
 end
 
 return Def.ActorFrame{

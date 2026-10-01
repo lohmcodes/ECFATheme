@@ -122,8 +122,9 @@ local combo_bmt = LoadFont("_Combo Fonts/" .. combo_font .."/" .. combo_font)..{
 		if tns == "Miss" then
 			worst_judgment = 1
 		else
-			worst_judgment = math.max(worst_judgment, string.sub(tns,2,2))
-			if worst_judgment >= 4 then
+			worst_judgment = math.max(worst_judgment, tonumber(string.sub(tns,2,2)))
+			-- the combo breaks (and starts over) at Faults in Waterfall, Decents in ITG
+			if worst_judgment >= (SL.Global.GameMode == "Waterfall" and 5 or 4) then
 				worst_judgment = 1
 			end
 		end
@@ -261,6 +262,12 @@ local combo_bmt = LoadFont("_Combo Fonts/" .. combo_font .."/" .. combo_font)..{
 							self:effectcolor1(colors.FullComboW3[1]):effectcolor2(colors.FullComboW3[2])
 						elseif mods.ComboColors == "Solid" then
 							self:stopeffect():diffuse(solidColors.FullComboW3)
+						end
+					elseif worst_judgment == 4 then
+						if mods.ComboColors == "Glow" then
+							self:effectcolor1(colors.FullComboW4[1]):effectcolor2(colors.FullComboW4[2])
+						elseif mods.ComboColors == "Solid" then
+							self:stopeffect():diffuse(solidColors.FullComboW4)
 						end
 					end
 				else

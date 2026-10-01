@@ -216,7 +216,8 @@ end
 GetComboThreshold = function( MaintainOrContinue )
 
 	local Combo = {}
-	Combo.dance = { Maintain = "TapNoteScore_W3", Continue = "TapNoteScore_W3" }
+	-- Waterfall (dance): OKs (W4) keep the combo; Faults and Misses break it.
+	Combo.dance = { Maintain = "TapNoteScore_W4", Continue = "TapNoteScore_W4" }
 	Combo.pump  = { Maintain = "TapNoteScore_W4", Continue = "TapNoteScore_W4" }
 	Combo.techno= { Maintain = "TapNoteScore_W3", Continue = "TapNoteScore_W3" }
 	Combo.kb7   = { Maintain = "TapNoteScore_W4", Continue = "TapNoteScore_W4" }
@@ -290,8 +291,7 @@ end
 -- I'm pretty sure ZP Theart was wailing about such project bitrot in Lost Souls in Endless Time.
 
 GetDefaultFailType = function()
-	-- Waterfall's lifebars fail players themselves (WF.FailPlayer) and play continues,
-	-- as in Waterfall Expanded.
+	-- Waterfall's lifebars fail players themselves (WF.FailPlayer) and play continues.
 	if SL.Global.GameMode == "Waterfall" then return "FailType_ImmediateContinue" end
 
 	local default_mods = PREFSMAN:GetPreference("DefaultModifiers")
