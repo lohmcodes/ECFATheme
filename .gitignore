@@ -1,0 +1,6 @@
+.DS_Store
+Modules/Tinkering.lua
+.vscode/
+.github/copilot-instructions.md
+deploy.sh
+CLAUDE.md
