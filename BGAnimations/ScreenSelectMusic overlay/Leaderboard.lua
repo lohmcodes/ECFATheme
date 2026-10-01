@@ -191,55 +191,35 @@ local LeaderboardRequestProcessor = function(res, master)
 		if data[playerStr] then
 			master[pn].isRanked = data[playerStr]["isRanked"]
 
-			-- First add the main leaderboard.
+			-- The Waterfall leaderboard first, then the simulated ITG and EX ones
+			-- (EX first of those if the player prefers EX).
+			local boards = {
+				{ key="wfLeaderboard", name="ECFA Cloud", isEx=false },
+				{ key="itgLeaderboard", name="ITG", isEx=false },
+				{ key="exLeaderboard", name="EX", isEx=true },
+			}
 			if SL["P"..i].ActiveModifiers.ShowExScore then
-				-- If the player is using EX scoring, then we want to display the EX leaderboard first.
-				if data[playerStr]["exLeaderboard"] then
+				boards[2], boards[3] = boards[3], boards[2]
+			end
+			for board in ivalues(boards) do
+				if data[playerStr][board.key] then
 					leaderboardList[#leaderboardList + 1] = {
-						Name="ECFA Cloud",
-						Data=DeepCopy(data[playerStr]["exLeaderboard"]),
-						IsEX=true
-					}
-					master[pn]["LeaderboardIndex"] = 1
-				end
-
-				if data[playerStr]["itgLeaderboard"] then
-					leaderboardList[#leaderboardList + 1] = {
-						Name="ECFA Cloud",
-						Data=DeepCopy(data[playerStr]["itgLeaderboard"]),
-						IsEX=false
-					}
-					master[pn]["LeaderboardIndex"] = 1
-				end
-			else
-				-- Display the main ECFA Cloud leaderboard first if player is not using EX scoring.
-				if data[playerStr]["itgLeaderboard"] then
-					leaderboardList[#leaderboardList + 1] = {
-						Name="ECFA Cloud",
-						Data=DeepCopy(data[playerStr]["itgLeaderboard"]),
-						IsEX=false
-					}
-					master[pn]["LeaderboardIndex"] = 1
-				end
-				
-				if data[playerStr]["exLeaderboard"] then
-					leaderboardList[#leaderboardList + 1] = {
-						Name="ECFA Cloud",
-						Data=DeepCopy(data[playerStr]["exLeaderboard"]),
-						IsEX=true
+						Name=board.name,
+						Data=DeepCopy(data[playerStr][board.key]),
+						IsEX=board.isEx
 					}
 					master[pn]["LeaderboardIndex"] = 1
 				end
 			end
 
 			-- Then any event leaderboards.
-			-- ECFA Cloud event leaderboards are EX scored.
+			-- ECFA Cloud event leaderboards are Waterfall scored.
 			for ev in ivalues(data[playerStr]["events"] or {}) do
 				if ev["leaderboard"] then
 					leaderboardList[#leaderboardList + 1] = {
 						Name=ev["name"],
 						Data=DeepCopy(ev["leaderboard"]),
-						IsEX=true
+						IsEX=false
 					}
 					master[pn]["LeaderboardIndex"] = 1
 				end

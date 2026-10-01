@@ -13,15 +13,11 @@ if failtype == "FailType_Off" then return end
 -- ------------------------------------------------------------------
 
 local pn = ToEnumShortString(player)
+local pnum = tonumber(pn:sub(-1))
 
 local style = GAMESTATE:GetCurrentStyle()
 local styleType = style:GetStyleType()
 local IsPlayingDouble = (styleType == 'StyleType_OnePlayerTwoSides' or styleType == 'StyleType_TwoPlayersSharedSides')
-
--- Is there any reason to have this use GAMESTATE:GetPlayerState(player):GetHealthState() ?
--- I guess I should look into it eventually. For now, assuming that the player has started
--- this stage with a HealthState of "Alive" works okay.
-local prevHealth = "HealthState_Alive"
 
 local danger = Def.Quad{
 	Name="Danger" .. pn,
@@ -43,33 +39,31 @@ local danger = Def.Quad{
 	HideCommand=function(self) self:stopeffect():stoptweening():linear(0.3):diffusealpha(0) end
 }
 
--- if the player has HideDanger enabled, we only want to flash the red Quad if they fail
+-- Driven by the Waterfall lifebars (Scripts/WF-LifeBars.lua): danger follows the
+-- lifebar shown on screen, which drops to the next easier one when it fails.
 if SL[pn].ActiveModifiers.HideDanger then
-
-	danger.HealthStateChangedMessageCommand=function(self, param)
-		if param.PlayerNumber == player and param.HealthState == "HealthState_Dead" then
+	-- only flash when the player fails
+	danger.WFDangerMessageCommand=function(self, param)
+		if param.pn == pnum and param.ind == WF.LowestLifeBarToFail and param.event == "Dead" then
 			self:playcommand("Dead")
 		end
 	end
-
 else
-	danger.HealthStateChangedMessageCommand=function(self, param)
-		if param.PlayerNumber == player then
-			if param.HealthState == "HealthState_Danger" then
+	danger.WFDangerMessageCommand=function(self, param)
+		if param.pn ~= pnum then return end
+		local visible = WF.VisibleLifeBar[pnum]
+		if param.ind == visible then
+			if param.event == "In" then
 				self:playcommand("Danger")
-				prevHealth = "HealthState_Danger"
-
-			elseif param.HealthState == "HealthState_Dead" then
+			elseif param.event == "Dead" then
 				self:playcommand("Dead")
-
-			else
-				if prevHealth == "HealthState_Danger" then
-					self:playcommand("OutOfDanger")
-				else
-					self:playcommand("Hide")
-				end
-				prevHealth = "HealthState_Alive"
+			elseif param.event == "Out" then
+				self:playcommand("OutOfDanger")
 			end
+		elseif param.event == "Dead" and param.ind == visible + 1
+		and WF.GetCurrentLife(pnum, visible) > WF.DangerThreshold[visible] then
+			-- the harder lifebar died, and the one now shown isn't in danger
+			self:playcommand("Hide")
 		end
 	end
 end

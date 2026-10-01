@@ -167,8 +167,8 @@ local LeaderboardRequestProcessor = function(res, master)
 		local itgIdx = exFirst and 2 or 1
 		local exIdx = exFirst and 1 or 2
 
-		if showITG and data[playerStr]["itgLeaderboard"] then
-			FillBoard(itgIdx, data[playerStr]["itgLeaderboard"], false)
+		if showITG and data[playerStr]["wfLeaderboard"] then
+			FillBoard(itgIdx, data[playerStr]["wfLeaderboard"], false)
 		end
 		if showEX and data[playerStr]["exLeaderboard"] then
 			FillBoard(exIdx, data[playerStr]["exLeaderboard"], true)
@@ -178,7 +178,7 @@ local LeaderboardRequestProcessor = function(res, master)
 		local ev = data[playerStr]["events"] and data[playerStr]["events"][1]
 		if showEvents and ev and ev["leaderboard"] then
 			event_name = ev["name"] or ""
-			FillBoard(3, ev["leaderboard"], true)
+			FillBoard(3, ev["leaderboard"], false)
 			master:playcommand("SetEventName")
 		end
 	end

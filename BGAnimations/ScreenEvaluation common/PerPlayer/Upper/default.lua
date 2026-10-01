@@ -15,6 +15,9 @@ return Def.ActorFrame{
 	-- letter grade
 	LoadActor("./LetterGrade.lua", player),
 
+	-- Waterfall clear type
+	LoadActor("./ClearType.lua", player),
+
 	-- nice
 	LoadActor("./nice.lua", player),
 

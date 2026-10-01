@@ -9,6 +9,13 @@
 if SL.Global.GameMode == "Casual" then return end
 
 local player = ...
+local pnum = tonumber(ToEnumShortString(player):sub(-1))
+
+-- In Waterfall mode the engine judges with Waterfall's windows, so the EX counts
+-- here come from a simulated ITG play instead: each tap's offset is re-judged
+-- with ITG's windows (WF.SimulateITGJudgment), and counting stops when the
+-- simulated ITG lifebar fails. This is what the secondary ITG/EX scores use.
+local simulate = SL.Global.GameMode == "Waterfall"
 
 local stats = STATSMAN:GetCurStageStats():GetPlayerStageStats(player)
 local storage = SL[ToEnumShortString(player)].Stages.Stats[SL.Global.Stages.PlayedThisGame + 1]
@@ -64,7 +71,31 @@ return Def.Actor{
 	JudgmentMessageCommand=function(self, params)
 		if params.Player ~= player then return end
 		if IsAutoplay(player) then return end
-		
+
+		if simulate then
+			local key = WF.SimulateITGJudgment(params)
+			if not key then return end
+			local count_updated = false
+			if not WF.ITGFailed[pnum] then
+				if key == "W0" or key == "W1" then
+					local offset = math.abs(params.TapNoteOffset)
+					if key == "W0" then storage.ex_counts.W0 = storage.ex_counts.W0 + 1 else storage.ex_counts.W1 = storage.ex_counts.W1 + 1 end
+					-- Hard EX splits Fantastics at 10ms instead
+					if offset <= 0.010 then storage.ex_counts.W010 = storage.ex_counts.W010 + 1 else storage.ex_counts.W110 = storage.ex_counts.W110 + 1 end
+				else
+					storage.ex_counts[key] = storage.ex_counts[key] + 1
+				end
+				count_updated = true
+			end
+			if key == "W0" then
+				storage.ex_counts.W0_total = storage.ex_counts.W0_total + 1
+				if math.abs(params.TapNoteOffset) <= 0.010 then storage.ex_counts.W010_total = storage.ex_counts.W010_total + 1 end
+			end
+			WF.UpdateITGLife(pnum, key)
+			if count_updated then self:playcommand("Broadcast") end
+			return
+		end
+
 		local count_updated = false
 		if params.HoldNoteScore then
 			local HNS = ToEnumShortString(params.HoldNoteScore)
@@ -119,7 +150,10 @@ return Def.Actor{
 				end
 			end
 		end
-		if count_updated then
+		if count_updated then self:playcommand("Broadcast") end
+	end,
+	BroadcastCommand=function(self)
+		do
 			-- Broadcast so other elements on ScreenGameplay can process the updated count.
 			local ExScore, actual_points, actual_possible=CalculateExScore(player,storage.ex_counts)
 

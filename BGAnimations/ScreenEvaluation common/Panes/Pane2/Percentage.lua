@@ -10,15 +10,12 @@ if (styletype == "TwoPlayersSharedSides") then
 	diffuse = SL.JudgmentColors[SL.Global.GameMode][1]
 elseif SL[ToEnumShortString(player)].ActiveModifiers.ShowExScore then
 	percent = CalculateExScore(player)
-	diffuse = SL.JudgmentColors[SL.Global.GameMode][1]
+	diffuse = SL.JudgmentColors["ITG"][1]
 else
-	local stats = STATSMAN:GetCurStageStats():GetPlayerStageStats(player)
-	local PercentDP = stats:GetPercentDancePoints()
-	percent = FormatPercentScore(PercentDP):gsub("%%", "")
-	-- Format the Percentage string, removing the % symbol
-	percent = tonumber(percent)
+	percent = CalculateSimulatedITGScore(player)
 	diffuse = Color.White
 end
+local label = SL[ToEnumShortString(player)].ActiveModifiers.ShowExScore and "EX" or "ITG"
 
 return Def.ActorFrame{
 	Name="PercentageContainer"..ToEnumShortString(player),
@@ -40,6 +37,16 @@ return Def.ActorFrame{
 			elseif ThemePrefs.Get("VisualStyle") == "Transistor"  then
 				self:diffusealpha(0.7)
 			end
+		end
+	},
+
+	-- which secondary score this is (simulated from note timing)
+	LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{
+		Text=label,
+		InitCommand=function(self)
+			self:zoom(0.6):diffuse(Color.White):diffusealpha(0.7)
+			self:horizalign(controller==PLAYER_1 and left or right)
+			self:xy(146 * (controller == PLAYER_1 and -1 or 1), 48)
 		end
 	},
 

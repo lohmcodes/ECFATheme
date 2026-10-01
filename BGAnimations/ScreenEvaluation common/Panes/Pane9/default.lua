@@ -43,7 +43,7 @@ pane[#pane+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{
 		end
 		local delta = e.rankingPointsDelta or 0
 		self:settext(table.concat({
-			("EX %.2f%%  ·  %s"):format(e.exScore / 100, e.clearType),
+			("%.2f%%  ·  %s"):format(e.score / 100, e.clearType),
 			("%s + %s bonus  /  %s pts"):format(Commas(e.songPoints), Commas(e.bonusPoints), Commas(e.maxPoints)),
 			("Ranking points %s (%s%s)"):format(Commas(e.rankingPoints), delta >= 0 and "+" or "-", Commas(math.abs(delta))),
 			("Rank %s"):format(rank),

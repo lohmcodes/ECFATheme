@@ -4,6 +4,7 @@ local style = GAMESTATE:GetCurrentStyle():GetName();
 if style == "double" then width = width * 0.95 end
 
 local pn = ToEnumShortString(player)
+local pnum = tonumber(pn:sub(-1))
 -- height is how tall, in pixels, the density graph will be
 local height = 105
 
@@ -220,7 +221,11 @@ local graph_and_lifeline = Def.ActorFrame{
 				if seconds > last_second then return end
 
 				local x = scale( seconds, first_second, last_second, 0, scaled_width )
-				local y = scale( LifeMeter:GetLife(), 1, 0, 0, height )
+				-- In Waterfall mode, follow the Waterfall lifebar shown on screen.
+				local life = SL.Global.GameMode == "Waterfall"
+					and WF.GetLifePercent(pnum, WF.VisibleLifeBar[pnum])
+					or LifeMeter:GetLife()
+				local y = scale( life, 1, 0, 0, height )
 
 				-- if the slope of the newest line segment is similar
 				-- to the slope of the previous segment, extend the old one.

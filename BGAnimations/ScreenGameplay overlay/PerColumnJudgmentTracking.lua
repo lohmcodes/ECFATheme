@@ -40,7 +40,8 @@ return Def.Actor{
 	end,
 	JudgmentMessageCommand=function(self, params)
 		local health_state = GAMESTATE:GetPlayerState(params.Player):GetHealthState()
-		if params.Player == player and params.Notes and health_state ~= 'HealthState_Dead' then
+		local failed = STATSMAN:GetCurStageStats():GetPlayerStageStats(params.Player):GetFailed()
+		if params.Player == player and params.Notes and health_state ~= 'HealthState_Dead' and not failed then
 			for col,tapnote in pairs(params.Notes) do
 				local tnt = ToEnumShortString(tapnote:GetTapNoteType())
 

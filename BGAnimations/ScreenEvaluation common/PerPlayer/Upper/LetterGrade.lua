@@ -31,7 +31,8 @@ if title == "D" then grade = "Grade_Tier99" end
 local ex = CalculateExScore(player, GetExJudgmentCounts(player))
 if ex == 100 then grade = "Grade_Tier00" end
 
-if award == 1 and playerStats:GetScore() == 0 then
+-- (the W0 award only exists for ITG mode, which stored its white count in Score)
+if award == 1 and playerStats:GetScore() == 0 and SL.Global.GameMode ~= "Waterfall" then
 	award = 0
 end
 

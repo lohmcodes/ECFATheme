@@ -970,6 +970,12 @@ local Overrides = {
 		Values = { "Standard", "Surround", "Vertical" },
 	},
 	-------------------------------------------------------------------------
+	-- Which Waterfall lifebar to show during gameplay. All three always run;
+	-- failing the Easy one fails the song.
+	PreferredLifeBar = {
+		Values = { "Hard", "Normal", "Easy" },
+	},
+	-------------------------------------------------------------------------
 	JudgmentFlash = {
 		SelectType = "SelectMultiple",
 		Values = { "FlashMiss", "FlashWayOff", "FlashDecent", "FlashGreat", "FlashExcellent", "FlashFantastic" }

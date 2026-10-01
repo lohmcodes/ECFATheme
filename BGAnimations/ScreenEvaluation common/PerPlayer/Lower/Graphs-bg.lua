@@ -96,9 +96,33 @@ af[#af+1] = Def.Sprite{
 -- in normal gameplay (non-CourseMode), we hide the solid color but leave the white line.
 -- in CourseMode, we hide the white line (for aesthetic reasons) and leave the solid color
 -- as ScatterPlot.lua does not yet support CourseMode.
+-- In Waterfall mode the engine's lifebar never moves, so draw the three
+-- Waterfall lifebars (Easy, Normal, Hard) instead.
+local WaterfallLifeGraph = SL.Global.GameMode == "Waterfall" and not GAMESTATE:IsCourseMode()
+if WaterfallLifeGraph then
+	local steps = GAMESTATE:GetCurrentSteps(player)
+	local firstSecond = math.min(steps:GetTimingData():GetElapsedTimeFromBeat(0), 0)
+	local lastSecond = GAMESTATE:GetCurrentSong():GetLastSecond()
+	local pnum = tonumber(pn:sub(-1))
+	for ind = 1, #WF.LifeBarNames do
+		af[#af+1] = Def.ActorMultiVertex{
+			Name="WaterfallLifeGraph"..ind,
+			InitCommand=function(self)
+				self:x(-GraphWidth/2)
+				local verts = WF.GetLifeGraphVertices(pnum, ind, GraphWidth, GraphHeight, firstSecond, lastSecond)
+				self:SetDrawState({Mode="DrawMode_LineStrip"}):SetVertices(verts):SetLineWidth(1.5)
+			end,
+		}
+	end
+end
+
 af[#af+1] = Def.GraphDisplay{
 	Name="GraphDisplay",
 	InitCommand=function(self)
+		if WaterfallLifeGraph then
+			self:visible(false)
+			return
+		end
 		self:vertalign(top)
 		local ColorIndex = ((SL.Global.ActiveColorIndex + (player==PLAYER_1 and -1 or 1)) % #SL.Colors) + 1
 		self:Load("GraphDisplay" .. ColorIndex )

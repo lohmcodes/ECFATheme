@@ -1,16 +1,17 @@
 local player = ...
-if SL[ToEnumShortString(player)].ActiveModifiers.HideLifebar then return end
+local pn = ToEnumShortString(player)
+if SL[pn].ActiveModifiers.HideLifebar then return end
 
-local lifemeter_actor
+-- Casual has no lifebar.
+if SL.Global.GameMode ~= "Waterfall" then return end
 
--- in ITG, we have the choice a "Standard" LifeMeter (at the top of the screen)
--- a "Surround" LifeMeter, which occupies the space behind the arrows,
--- or a "Vertical" LifeMeter, which mimics the sizing and positioning used in ITG2.
-if SL.Global.GameMode == "ITG" then
-	local lifemeter_type = SL[ToEnumShortString(player)].ActiveModifiers.LifeMeterType or CustomOptionRow("LifeMeterType").Choices[1]
-	lifemeter_actor = LoadActor(lifemeter_type .. ".lua", player)
+-- One meter per Waterfall lifebar (Easy, Normal, Hard), drawn on top of each
+-- other. Only the player's preferred lifebar is shown; when it fails, the next
+-- easier one takes its place (see WF.VisibleLifeBar in Scripts/WF-LifeBars.lua).
+local lifemeter_type = SL[pn].ActiveModifiers.LifeMeterType or CustomOptionRow("LifeMeterType").Choices[1]
+
+local af = Def.ActorFrame{ Name="LifeMeter_"..pn }
+for ind = 1, #WF.LifeBarNames do
+	af[#af+1] = LoadActor(lifemeter_type == "Surround" and "./Surround.lua" or "./Bar.lua", {player=player, index=ind, type=lifemeter_type})
 end
-
--- Casual doesn't have a LifeMeter, so in Casual GameMode,
--- lifemeter_actor will be returned as nil
-return lifemeter_actor
+return af

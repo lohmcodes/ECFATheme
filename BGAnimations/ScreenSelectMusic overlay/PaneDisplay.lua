@@ -103,8 +103,8 @@ local GetScoresRequestProcessor = function(res, params)
 			local leaderboardData = nil
 			if showExScore then
 				leaderboardData = data[playerStr]["exLeaderboard"]
-			elseif data[playerStr]["itgLeaderboard"] then
-				leaderboardData = data[playerStr]["itgLeaderboard"]
+			elseif data[playerStr]["wfLeaderboard"] then
+				leaderboardData = data[playerStr]["wfLeaderboard"]
 			end
 
 			if leaderboardData then

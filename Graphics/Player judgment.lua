@@ -341,10 +341,10 @@ return Def.ActorFrame{
 			-- frame displays based on what judgment the player earns
 			self:animate(false):visible(false)
 			
-			-- if we are on ScreenEdit, judgment graphic is always "Love"
+			-- if we are on ScreenEdit, judgment graphic is always "Optimus Dark"
 			-- because ScreenEdit is a mess and not worth bothering with.
 			if string.match(tostring(SCREENMAN:GetTopScreen()), "ScreenEdit") then
-				self:Load( THEME:GetPathG("", "_judgments/Love") )
+				self:Load( THEME:GetPathG("", "_judgments/Optimus Dark") )
 
 			else
 				self:Load( THEME:GetPathG("", "_judgments/" .. file_to_load) )
@@ -373,10 +373,10 @@ return Def.ActorFrame{
 			-- frame displays based on what judgment the player earns
 			self:animate(false):visible(false)
 			
-			-- if we are on ScreenEdit, judgment graphic is always "Love"
+			-- if we are on ScreenEdit, judgment graphic is always "Optimus Dark"
 			-- because ScreenEdit is a mess and not worth bothering with.
 			if string.match(tostring(SCREENMAN:GetTopScreen()), "ScreenEdit") then
-				self:Load( THEME:GetPathG("", "_judgments/Love") )
+				self:Load( THEME:GetPathG("", "_judgments/Optimus Dark") )
 
 			else
 				self:Load( THEME:GetPathG("", "_judgments/" .. file_to_load) )

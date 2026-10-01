@@ -18,7 +18,7 @@ for i = 1, NumJudgmentsAvailable() do
     end
 end
 
-local W1 = SL.Preferences["FA+"].TimingWindowSecondsW1 + SL.Preferences.ITG.TimingWindowAdd
+local W1 = GetTimingWindow(1, "FA+")
 
 local SplitWhites = mods.SmallerWhite and mods.SplitWhites and mods.ShowFaPlusWindow
 

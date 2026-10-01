@@ -9,8 +9,8 @@ local style = GAMESTATE:GetCurrentStyle():GetName()
 local StepsOrTrail = (GAMESTATE:IsCourseMode() and GAMESTATE:GetCurrentTrail(player)) or GAMESTATE:GetCurrentSteps(player)
 local total_tapnotes = StepsOrTrail:GetRadarValues(player):GetValue( "RadarCategory_Notes" )
 
--- Only add this in ITG mode.
-local ShowFaPlusWindow = SL[pn].ActiveModifiers.ShowFaPlusWindow and SL.Global.GameMode=="ITG"
+-- Only add this in Waterfall mode: Masterfuls within 12.5ms (W0) get their own row.
+local ShowFaPlusWindow = SL[pn].ActiveModifiers.ShowFaPlusWindow and SL.Global.GameMode=="Waterfall"
 
 -- determine how many digits are needed to express the number of notes in base-10
 local digits = (math.floor(math.log10(total_tapnotes)) + 1)
@@ -39,16 +39,11 @@ local tns_string = "TapNoteScore" .. (SL.Global.GameMode=="ITG" and "" or SL.Glo
 -- get TNS names appropriate for the current GameMode, localized to the current language
 for i, judgment in ipairs(TNS.Types) do
 	if ShowFaPlusWindow then
-		-- Add the windows from FA+ (W0 is handled by FA+ W1).
-		if judgment ~= "W0" then
-			TNS.Names[#TNS.Names+1] = THEME:GetString("TapNoteScoreFA+", judgment)
-			TNS.Colors[#TNS.Colors+1] = SL.JudgmentColors["FA+"][i-1]
-		end
-		-- And then additionally add the Way Off window.
-		if judgment == "W5" then
-			TNS.Names[#TNS.Names+1] = THEME:GetString("TapNoteScore", judgment)
-			TNS.Colors[#TNS.Colors+1] = SL.JudgmentColors["ITG"][5]
-		end
+		-- W0 and W1 are both Masterfuls; W1 (outside 12.5ms) is drawn paler.
+		local window = judgment == "W0" and "W1" or judgment
+		local c = SL.JudgmentColors[SL.Global.GameMode][judgment == "W0" and 1 or i-1]
+		TNS.Names[#TNS.Names+1] = THEME:GetString(tns_string, window)
+		TNS.Colors[#TNS.Colors+1] = judgment == "W1" and lerp_color(0.5, c, Color.White) or c
 	else
 		TNS.Names[#TNS.Names+1] = THEME:GetString(tns_string, judgment)
 		TNS.Colors[#TNS.Colors+1] = SL.JudgmentColors[SL.Global.GameMode][i]

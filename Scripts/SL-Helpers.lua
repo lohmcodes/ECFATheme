@@ -51,6 +51,13 @@ end
 -- get timing window in milliseconds
 
 GetTimingWindow = function(n, mode, tenms)
+	-- In Waterfall mode, "FA+" means the top window split at Waterfall's FA+
+	-- window: n=1 is a Masterful within 12.5ms (10ms with tenms), and n>=2 are
+	-- Waterfall's windows W1, W2, ...
+	if mode == "FA+" and SL.Global.GameMode ~= "Casual" and SL.Global.GameMode ~= "FA+" then
+		if n == 1 then return tenms and 0.010 or 0.0125 end
+		return GetTimingWindow(n - 1)
+	end
 	local prefs = SL.Preferences[mode or SL.Global.GameMode]
 	local scale = PREFSMAN:GetPreference("TimingWindowScale")
 	if mode == "FA+" and tenms and n == 1 then
@@ -283,6 +290,10 @@ end
 -- I'm pretty sure ZP Theart was wailing about such project bitrot in Lost Souls in Endless Time.
 
 GetDefaultFailType = function()
+	-- Waterfall's lifebars fail players themselves (WF.FailPlayer) and play continues,
+	-- as in Waterfall Expanded.
+	if SL.Global.GameMode == "Waterfall" then return "FailType_ImmediateContinue" end
+
 	local default_mods = PREFSMAN:GetPreference("DefaultModifiers")
 
 	local default_fail = ""
@@ -335,7 +346,7 @@ end
 -- -----------------------------------------------------------------------
 
 SetGameModePreferences = function()
-	-- apply the preferences associated with this SL GameMode (Casual, ITG)
+	-- apply the preferences associated with this SL GameMode (Casual, Waterfall)
 	for key,val in pairs(SL.Preferences[SL.Global.GameMode]) do
 		PREFSMAN:SetPreference(key, val)
 	end
@@ -349,6 +360,9 @@ SetGameModePreferences = function()
 		-- so turn Decents and WayOffs off now.
 		if SL.Global.GameMode == "Casual" then
 			SL[pn].ActiveModifiers.TimingWindows = {true,true,true,false,false}
+		else
+			-- Waterfall is always played with every window (ECFA Cloud requires it).
+			SL[pn].ActiveModifiers.TimingWindows = {true,true,true,true,true}
 		end
 
 		-- Now that we've set the SL table for TimingWindows appropriately,
@@ -378,9 +392,9 @@ SetGameModePreferences = function()
 	-- Stats.xml, ECFA-Stats.xml, Casual-Stats.xml
 	local prefix = {}
 
-	-- ITG has no prefix and scores go directly into the main Stats.xml
-	-- this was probably a Bad Decision™ on my part in hindsight  -quietly
-	prefix["ITG"] = ""
+	-- Waterfall scores aren't comparable with the ITG scores in the main
+	-- Stats.xml, so they're kept separately.
+	prefix["Waterfall"] = "Waterfall-"
 
 	prefix["Casual"] = "Casual-"
 
@@ -508,8 +522,9 @@ GetJudgmentGraphics = function()
 			-- remove the file extension from the string, leaving only the name of the graphic
 			local name = StripSpriteHints(filename)
 
-			-- Fill the table, special-casing Love so that it comes first.
-			if name == "Love" then
+			-- Fill the table, special-casing Waterfall's default (Optimus Dark) so that it
+			-- comes first. These are Waterfall judgment graphics (Masterful ... Miss).
+			if name == "Optimus Dark" then
 				table.insert(judgment_graphics, 1, filename)
 			else
 				judgment_graphics[#judgment_graphics+1] = filename
@@ -619,46 +634,21 @@ IsW0Judgment = function(params, player)
 	if params.Player ~= player then return false end
 	if params.HoldNoteScore then return false end
 
-	-- Only check/update FA+ count if we received a TNS in the top window.
-	if params.TapNoteScore == "TapNoteScore_W1" and SL.Global.GameMode == "ITG" then
-		local prefs = SL.Preferences["FA+"]
-		local scale = PREFSMAN:GetPreference("TimingWindowScale")
-		local pn = ToEnumShortString(player)
-		local W0 = prefs["TimingWindowSecondsW1"] * scale + prefs["TimingWindowAdd"]
-
-		local offset = math.abs(params.TapNoteOffset)
-		if offset <= W0 then
-			return true
-		end
-	elseif params.TapNoteScore == "TapNoteScore_W1" and SL.Global.GameMode == "FA+" then
-		local prefs = SL.Preferences["FA+"]
-		local scale = PREFSMAN:GetPreference("TimingWindowScale")
-		local pn = ToEnumShortString(player)
-		local W0 = prefs["TimingWindowSecondsW1"] * scale + prefs["TimingWindowAdd"]
-		
-		local offset = math.abs(params.TapNoteOffset)
-		if offset <= W0 then
-			return true
-		end
+	-- In Waterfall mode, the "W0" split of the top window is a Masterful within
+	-- 12.5ms (Waterfall's FA+ window).
+	if params.TapNoteScore == "TapNoteScore_W1" and params.TapNoteOffset then
+		return math.abs(params.TapNoteOffset) <= 0.0125
 	end
 	return false
 end
 
+-- Masterful within 10ms (the "SmallerWhite" split).
 IsW010Judgment = function(params, player)
 	if params.Player ~= player then return false end
 	if params.HoldNoteScore then return false end
-	
-	-- Only check/update FA+ count if we received a TNS in the top window.
-	if params.TapNoteScore == "TapNoteScore_W1" and SL.Global.GameMode == "ITG"  then
-		local prefs = SL.Preferences["FA+"]
-		local scale = PREFSMAN:GetPreference("TimingWindowScale")
-		local pn = ToEnumShortString(player)
-		local W0 = 0.0085 * scale + prefs["TimingWindowAdd"]
 
-		local offset = math.abs(params.TapNoteOffset)
-		if offset <= W0 then
-			return true
-		end
+	if params.TapNoteScore == "TapNoteScore_W1" and params.TapNoteOffset then
+		return math.abs(params.TapNoteOffset) <= 0.010
 	end
 	return false
 end
@@ -698,6 +688,17 @@ GetExJudgmentCounts = function(player)
 	local counts = {}
 
 	local TNS = { "W1", "W2", "W3", "W4", "W5", "Miss" }
+
+	-- In Waterfall mode these are the simulated ITG judgments tracked in
+	-- ./BGAnimations/ScreenGameplay overlay/TrackExScoreJudgments.lua
+	local ex_counts = SL.Global.GameMode == "Waterfall" and SL[pn].Stages.Stats[SL.Global.Stages.PlayedThisGame + 1].ex_counts
+	if ex_counts then
+		counts["W0"] = ex_counts.W0
+		counts["W010"] = ex_counts.W010
+		counts["W110"] = ex_counts.W110
+		for window in ivalues(TNS) do counts[window] = ex_counts[window] end
+		TNS = {}
+	end
 
 	for window in ivalues(TNS) do
 		-- Get the count.
@@ -777,6 +778,23 @@ end
 --
 -- The W0 weight may have been modified for Tournament mode purposes.
 -- Use the optional boolean argument use_actual_w0_weight to choose to fallback to the proper W0 weight.
+-- -----------------------------------------------------------------------
+-- The simulated ITG score (see WF.SimulateITGJudgment) as a percentage with two
+-- decimals, from the ITG judgments tracked in ex_counts. Waterfall mode only.
+CalculateSimulatedITGScore = function(player, ex_counts)
+	local counts = ex_counts or SL[ToEnumShortString(player)].Stages.Stats[SL.Global.Stages.PlayedThisGame + 1].ex_counts
+	if counts == nil then return 0 end
+	local StepsOrTrail = (GAMESTATE:IsCourseMode() and GAMESTATE:GetCurrentTrail(player)) or GAMESTATE:GetCurrentSteps(player)
+	local radar = StepsOrTrail:GetRadarValues(player)
+	local possible = (radar:GetValue("RadarCategory_TapsAndHolds") + radar:GetValue("RadarCategory_Holds") + radar:GetValue("RadarCategory_Rolls")) * 5
+	if possible <= 0 then return 0 end
+	local w = SL.Metrics.ITG
+	local points = (counts.W0 + counts.W1) * w.PercentScoreWeightW1 + counts.W2 * w.PercentScoreWeightW2
+		+ counts.W3 * w.PercentScoreWeightW3 + counts.W4 * w.PercentScoreWeightW4 + counts.W5 * w.PercentScoreWeightW5
+		+ counts.Miss * w.PercentScoreWeightMiss + counts.Held * w.PercentScoreWeightHeld + counts.HitMine * w.PercentScoreWeightHitMine
+	return math.max(0, math.floor(points / possible * 10000) / 100)
+end
+
 CalculateExScore = function(player, ex_counts, use_actual_w0_weight)
 	-- No EX scores in Casual mode, just return some dummy number early.
 	if SL.Global.GameMode == "Casual" then return 0 end

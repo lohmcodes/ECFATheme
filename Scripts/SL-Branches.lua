@@ -150,7 +150,7 @@ Branch.AllowScreenSelectPlayMode2 = function()
 	SetGameModePreferences()
 	-- and reload the theme's Metrics
 	THEME:ReloadMetrics()
-	if SL.Global.GameMode == "ITG" and ThemePrefs.Get("AllowScreenSelectPlayMode2") then
+	if SL.Global.GameMode == "Waterfall" and ThemePrefs.Get("AllowScreenSelectPlayMode2") then
 		return "ScreenSelectPlayMode2"
 	else
 		return "ScreenProfileLoad"

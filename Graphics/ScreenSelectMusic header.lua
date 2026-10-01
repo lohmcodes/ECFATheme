@@ -124,7 +124,7 @@ else
 
 end
 
--- "ITG" aligned to right of screen
+-- the GameMode ("Waterfall") aligned to right of screen
 af[#af+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Header")..{
 	Name="GameModeText",
 	Text=THEME:GetString("ScreenSelectPlayMode", SL.Global.GameMode),

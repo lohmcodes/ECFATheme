@@ -40,6 +40,7 @@ local permitted_profile_settings = {
 	HideComboExplosions  = "boolean",
 
 	LifeMeterType        = "string",
+	PreferredLifeBar     = "string",
 	DataVisualizations   = "string",
 	StepStatsExtra       = "string",
 	TargetScore          = "string",

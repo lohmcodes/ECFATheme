@@ -189,7 +189,7 @@ local LeaderboardRequestProcessor = function(res, args)
 
 		-- Fill in display order so the first board shown is the first style.
 		local boards = {
-			{ idx=itgIdx, key="itgLeaderboard", show=showITG, isEx=false },
+			{ idx=itgIdx, key="wfLeaderboard", show=showITG, isEx=false },
 			{ idx=exIdx, key="exLeaderboard", show=showEX, isEx=true },
 		}
 		table.sort(boards, function(a, b) return a.idx < b.idx end)
@@ -203,7 +203,7 @@ local LeaderboardRequestProcessor = function(res, args)
 		local ev = data[playerStr]["events"] and data[playerStr]["events"][1]
 		if showEvents and ev and ev["leaderboard"] then
 			event_name = ev["name"] or ""
-			FillBoard(3, ev["leaderboard"], true)
+			FillBoard(3, ev["leaderboard"], false)
 			master:playcommand("SetEventName")
 		end
 	end

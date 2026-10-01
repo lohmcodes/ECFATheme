@@ -181,7 +181,7 @@ for columnIndex=1,numColumns do
 				self:addx(((mods.NoteFieldOffsetX * -1) * (1 + mini)) * 2)
 				self:addy((mods.NoteFieldOffsetY * (1 + mini)) * 2)
 				
-				-- if we are on ScreenEdit, judgment graphic is always "Love"
+				-- if we are on ScreenEdit, judgment graphic is always "Optimus Dark"
 				-- because ScreenEdit is a mess and not worth bothering with.
 				if string.match(tostring(SCREENMAN:GetTopScreen()), "ScreenEdit") then
 					self:Load( THEME:GetPathG("", "_HeldMiss/Love") )
@@ -198,10 +198,10 @@ for columnIndex=1,numColumns do
 				-- frame displays based on what judgment the player earns
 				self:animate(false):visible(false)
 				
-				-- if we are on ScreenEdit, judgment graphic is always "Love"
+				-- if we are on ScreenEdit, judgment graphic is always "Optimus Dark"
 				-- because ScreenEdit is a mess and not worth bothering with.
 				if string.match(tostring(SCREENMAN:GetTopScreen()), "ScreenEdit") then
-					self:Load( THEME:GetPathG("", "_judgments/Love") )
+					self:Load( THEME:GetPathG("", "_judgments/Optimus Dark") )
 
 				else
 					self:Load( THEME:GetPathG("", "_judgments/" .. judgments_to_load) )

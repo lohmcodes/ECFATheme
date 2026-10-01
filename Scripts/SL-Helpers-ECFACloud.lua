@@ -317,7 +317,7 @@ end
 --  - ECFA Cloud is enabled in the operator menu.
 --  - We were successfully able to make an ECFA Cloud connection previously.
 --  - We must be in the "dance" or "pump" game mode (not "techno", etc)
---  - We must be in ITG.
+--  - We must be in Waterfall mode.
 --  - At least one Api Key must be available (this condition may be relaxed in the future)
 --  - We must not be in course mode (ZANKOKU: moving this specific check to autosubmitscore instead, since otherwise it blocks scorebox when playing course mode).
 IsServiceAllowed = function(condition)
@@ -325,7 +325,7 @@ IsServiceAllowed = function(condition)
 		ThemePrefs.Get("EnableECFACloud") and
 		SL.ECFACloud.IsConnected and
 		(GAMESTATE:GetCurrentGame():GetName() == "dance" or GAMESTATE:GetCurrentGame():GetName() == "pump") and
-		SL.Global.GameMode == "ITG" and
+		SL.Global.GameMode == "Waterfall" and
 		(SL.P1.ApiKey ~= "" or SL.P2.ApiKey ~= ""))
 end
 
@@ -356,121 +356,46 @@ ValidForECFACloud = function(player)
 	-- Courses/Marathons are not ranked on ECFA Cloud.
 	valid[3] = not GAMESTATE:IsCourseMode()
 
-	-- ECFA Cloud ranks scores using ITG settings.
-	-- FA+ is okay because it just halves ITG's TimingWindowW1 but keeps everything else the same.
-	-- Casual (and Experimental, Demonic, etc.) uses different settings
-	-- that are incompatible with ECFA Cloud ranking.
-	valid[4] = SL.Global.GameMode == "ITG"
+	-- ECFA Cloud ranks scores judged with Waterfall settings. Casual uses the
+	-- same windows but a different presentation and no lifebars.
+	valid[4] = SL.Global.GameMode == "Waterfall"
 
 	-- ------------------------------------------
-	-- Next, check global Preferences that would invalidate the score.
-
-	-- TimingWindowScale and LifeDifficultyScale are a little confusing. Players can change these under
-	-- Advanced Options in the operator menu on scales from [1 to Justice] and [1 to 7], respectively.
-	--
-	-- The OptionRow for TimingWindowScale offers [1, 2, 3, 4, 5, 6, 7, 8, Justice] as options
-	-- and these map to [1.5, 1.33, 1.16, 1, 0.84, 0.66, 0.5, 0.33, 0.2] in Preferences.ini for internal use.
-	--
-	-- The OptionRow for LifeDifficultyScale offers [1, 2, 3, 4, 5, 6, 7] as options
-	-- and these map to [1.6, 1.4, 1.2, 1, 0.8, 0.6, 0.4] in Preferences.ini for internal use.
-	--
-	-- I don't know the history here, but I suspect these preferences are holdovers from SM3.9 when
-	-- themes were just visual skins and core mechanics like TimingWindows and Life scaling could only
-	-- be handled by the SM engine.  Whatever the case, they're still exposed as options in the
-	-- operator menu and players still play around with them, so we need to handle that here.
-	--
-	-- 4 (1, internally) is considered standard for ITG.
-	-- ECFA Cloud expects players to have both these set to 4 (1, internally).
-	-- We also allow people to use harder values as well.
-	--
-	-- People can probably use some combination of LifeDifficultyScale,
-	-- TimingWindowScale, and TimingWindowAdd to probably match up with ITG's windows, but that's a
-	-- bit cumbersome to handle so just requre TimingWindowScale and LifeDifficultyScale these to be set
-	-- to 4.
-	valid[5] = PREFSMAN:GetPreference("TimingWindowScale") <= 1
-	valid[6] = PREFSMAN:GetPreference("LifeDifficultyScale") <= 1
-
-	-- Validate all other metrics.
-	local ExpectedTWA = 0.0015
-	local ExpectedWindows = {
-		0.021500 + ExpectedTWA,  -- Fantastics
-		0.043000 + ExpectedTWA,  -- Excellents
-		0.102000 + ExpectedTWA,  -- Greats
-		0.135000 + ExpectedTWA,  -- Decents
-		0.180000 + ExpectedTWA,  -- Way Offs
-		0.320000 + ExpectedTWA,  -- Holds
-		0.070000 + ExpectedTWA,  -- Mines
-		0.350000 + ExpectedTWA,  -- Rolls
-	}
-	local TimingWindows = { "W1", "W2", "W3", "W4", "W5", "Hold", "Mine", "Roll" }
-	local ExpectedLife = {
-		 0.008,  -- Fantastics
-		 0.008,  -- Excellents
-		 0.004,  -- Greats
-		 0.000,  -- Decents
-		-0.050,  -- Way Offs
-		-0.100,  -- Miss
-		-0.080,  -- Let Go
-		 0.008,  -- Held
-		-0.050,  -- Hit Mine
-	}
-	local ExpectedScoreWeight = {
-		 5,  -- Fantastics
-		 4,  -- Excellents
-		 2,  -- Greats
-		 0,  -- Decents
-		-6,  -- Way Offs
-		-12,  -- Miss
-		 0,  -- Let Go
-		 5,  -- Held
-		-6,  -- Hit Mine
-	}
-	local LifeWindows = { "W1", "W2", "W3", "W4", "W5", "Miss", "LetGo", "Held", "HitMine" }
-
-	local Check = function(condition, errorString, badSettings)
-		if not condition then
-			badSettings[#badSettings + 1] = errorString
-		end
-
-		return condition
-	end
-
-	local badSettings = {}
-
-	-- Originally verify the ComboToRegainLife metrics.
-	valid[7] = Check(
-		PREFSMAN:GetPreference("RegenComboAfterMiss") == 5 and PREFSMAN:GetPreference("MaxRegenComboAfterMiss") == 10,
-		"- ComboToRegainLife Pref", badSettings
-	)
+	-- Next, check global Preferences and Metrics that would invalidate the score.
+	-- (ECFA Cloud checks the windows again server side.)
 
 	local FloatEquals = function(a, b)
 		return math.abs(a-b) < 0.0001
 	end
 
-	local FloatLE = function(a, b)
-		return a < b + 0.0001
+	local Check = function(condition, errorString, badSettings)
+		if not condition then
+			badSettings[#badSettings + 1] = errorString
+		end
+		return condition
 	end
 
-	valid[7] = Check(FloatEquals(THEME:GetMetric("LifeMeterBar", "InitialValue"), 0.5), "- Lifebar Initial Value", badSettings) and valid[7]
-	valid[7] = Check(PREFSMAN:GetPreference("HarshHotLifePenalty"), "- HarshHotLifePenalty", badSettings) and valid[7]
+	local badSettings = {}
 
-	-- And then verify the windows themselves.
-	local TWA = PREFSMAN:GetPreference("TimingWindowAdd")
+	-- TimingWindowScale is "4" in the operator menu (1, internally). The lifebars
+	-- are Waterfall's own, so LifeDifficultyScale doesn't matter.
+	valid[5] = Check(FloatEquals(PREFSMAN:GetPreference("TimingWindowScale"), 1), "- TimingWindowScale", badSettings)
+	valid[6] = true
+
+	local expected = SL.Preferences.Waterfall
+	local metrics = SL.Metrics.Waterfall
+	valid[7] = Check(FloatEquals(PREFSMAN:GetPreference("TimingWindowAdd"), expected.TimingWindowAdd), "- TimingWindowAdd", badSettings)
+	for window in ivalues({ "W1", "W2", "W3", "W4", "W5", "Hold", "Mine", "Roll" }) do
+		local key = "TimingWindowSeconds"..window
+		valid[7] = Check(FloatEquals(PREFSMAN:GetPreference(key), expected[key]), "- TimingWindow"..window, badSettings) and valid[7]
+	end
 	local pn = ToEnumShortString(player)
-	if SL.Global.GameMode == "ITG" then
-		for i, window in ipairs(TimingWindows) do
-			-- Only check if the Timing Window is actually "enabled".
-			if i > 5 or SL[pn].ActiveModifiers.TimingWindows[i] then
-				valid[7] = Check(FloatEquals(PREFSMAN:GetPreference("TimingWindowSeconds"..window) + TWA, ExpectedWindows[i]), "- TimingWindow"..window, badSettings) and valid[7]
-			end
-		end
-
-		for i, window in ipairs(LifeWindows) do
-			-- We can support *harder* lifebars (i.e. <= the expected weights).
-			valid[7] = Check(FloatLE(THEME:GetMetric("LifeMeterBar", "LifePercentChange"..window), ExpectedLife[i]), "- LifePercentChange"..window, badSettings) and valid[7]
-		
-			valid[7] = Check(THEME:GetMetric("ScoreKeeperNormal", "PercentScoreWeight"..window) == ExpectedScoreWeight[i], "- PercentScoreWeight"..window, badSettings) and valid[7]
-		end
+	for i = 1, 5 do
+		valid[7] = Check(SL[pn].ActiveModifiers.TimingWindows[i], "- TimingWindow W"..i.." disabled", badSettings) and valid[7]
+	end
+	for window in ivalues({ "W1", "W2", "W3", "W4", "W5", "Miss", "LetGo", "Held", "HitMine" }) do
+		local key = "PercentScoreWeight"..window
+		valid[7] = Check(THEME:GetMetric("ScoreKeeperNormal", key) == metrics[key], "- "..key, badSettings) and valid[7]
 	end
 
 	-- Validate Rate Mod
@@ -508,17 +433,8 @@ ValidForECFACloud = function(player)
 	-- AutoPlay/AutoplayCPU is not allowed
 	valid[12] = IsHumanPlayer(player)
 
-	local minTNSToScoreNores = ToEnumShortString(PREFSMAN:GetPreference("MinTNSToScoreNotes"))
-
-	if SL.Global.GameMode == "ITG" then
-		-- The cut off for rehits is only allowed to be set to Greats (W3) or worse.
-		-- Anything else is not allowed for ECFA Cloud submission.
-		-- "invalid" options (like HitMine or something), resolve to TNS_None.
-		valid[13] = minTNSToScoreNores ~= "W1" and minTNSToScoreNores ~= "W2"
-	else
-		-- Other game modes are not supported.
-		valid[13] = false
-	end
+	-- Waterfall doesn't rescore early hits.
+	valid[13] = ToEnumShortString(PREFSMAN:GetPreference("MinTNSToScoreNotes")) == "None"
 
 	-- ------------------------------------------
 	-- return the entire table so that we can let the player know which settings,
@@ -540,94 +456,29 @@ end
 CreateCommentString = function(player)
 	local pn = ToEnumShortString(player)
 	local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats(player)
-
-	local suffixes = {"w", "e", "g", "d", "wo"}
-
-	local comment = (SL.Global.GameMode == "FA+" or SL[pn].ActiveModifiers.ShowFaPlusWindow) and "FA+" or ""
-	
-	-- Show EX score for FA+ play
-	if SL.Global.GameMode == "FA+" or (SL.Global.GameMode == "ITG" and SL[pn].ActiveModifiers.ShowFaPlusWindow) then
-		comment = comment .. ", " .. ("%.2f"):format(CalculateExScore(player, GetExJudgmentCounts(player))) .. "EX"
-	end
+	local parts = {}
 
 	local rate = SL.Global.ActiveModifiers.MusicRate
 	if rate ~= 1 then
-		if #comment ~= 0 then
-			comment = comment .. ", "
-		end
-		comment = comment..("%gx Rate"):format(rate)
+		parts[#parts+1] = ("%gx Rate"):format(rate)
 	end
 
-	-- Get EX judgment counts if playing with FA+ windows enabled in ITG mode
-	if SL.Global.GameMode == "ITG" then
-		local counts = GetExJudgmentCounts(player)
-		local types = { 'W1', 'W2', 'W3', 'W4', 'W5', 'Miss' }
-		
-		for i=1,6 do
-			local window = types[i]
-			local number = counts[window] or 0
-			local suffix = i == 6 and "m" or suffixes[i]
-			
-			if i == 1 then
-				number = counts["W1"]
-			end
-			
-			if number ~= 0 then
-				if #comment ~= 0 then
-					comment = comment .. ", "
-				end
-				comment = comment..number..suffix
-			end
-		end
-	else
-		-- Ignore the top window in all cases.
-		for i=2, 6 do
-			local idx = SL.Global.GameMode == "FA+" and i-1 or i
-			local suffix = i == 6 and "m" or suffixes[idx]
-			local tns = i == 6 and "TapNoteScore_Miss" or "TapNoteScore_W"..i
-			
-			local number = pss:GetTapNoteScores(tns)
-
-			-- If the windows are disabled, then the number will be 0.
-			if number ~= 0 then
-				if #comment ~= 0 then
-					comment = comment .. ", "
-				end
-				comment = comment..number..suffix
-			end
+	-- Waterfall judgments below the top window: Awesome, Solid, OK, Fault, Miss
+	local windows = { {"W2", "a"}, {"W3", "s"}, {"W4", "o"}, {"W5", "f"}, {"Miss", "m"} }
+	for w in ivalues(windows) do
+		local number = pss:GetTapNoteScores("TapNoteScore_"..w[1])
+		if number ~= 0 then
+			parts[#parts+1] = number..w[2]
 		end
 	end
 
-	local timingWindowOption = ""
-
-	if SL.Global.GameMode == "ITG" then
-		if not SL[pn].ActiveModifiers.TimingWindows[4] and not SL[pn].ActiveModifiers.TimingWindows[5] then
-			timingWindowOption = "No Dec/WO"
-		elseif not SL[pn].ActiveModifiers.TimingWindows[5] then
-			timingWindowOption = "No WO"
-		elseif not SL[pn].ActiveModifiers.TimingWindows[1] and not SL[pn].ActiveModifiers.TimingWindows[2] then
-			timingWindowOption = "No Fan/Exc"
-		end
-	end
-
-	if #timingWindowOption ~= 0 then
-		if #comment ~= 0 then
-			comment = comment .. ", "
-		end
-		comment = comment..timingWindowOption
-	end
-
-	local pn = ToEnumShortString(player)
 	-- If a player CModded, then add that as well.
 	local cmod = GAMESTATE:GetPlayerState(pn):GetPlayerOptions("ModsLevel_Preferred"):CMod()
 	if cmod ~= nil then
-		if #comment ~= 0 then
-			comment = comment .. ", "
-		end
-		comment = comment.."C"..tostring(cmod)
+		parts[#parts+1] = "C"..tostring(cmod)
 	end
 
-	return comment
+	return table.concat(parts, ", ")
 end
 
 -- -----------------------------------------------------------------------

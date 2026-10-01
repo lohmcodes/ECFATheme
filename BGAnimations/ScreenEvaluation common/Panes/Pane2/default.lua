@@ -1,12 +1,12 @@
--- Pane2 displays the FA+ centric score out of a possible 100.00
--- aggregate judgment counts (overall W1, overall W2, overall miss, etc.)
+-- Pane2 displays the secondary ITG/EX score: a simulated ITG play, where every
+-- tap's offset was re-judged with ITG's windows (see WF.SimulateITGJudgment),
+-- with its judgment counts (Fantastic+ within 15ms, Fantastic, Excellent, ...)
 -- and judgment counts on holds, mines, rolls
 local player = unpack(...)
 local pn = ToEnumShortString(player)
 
--- We only want to use this in ITG mode.
--- We don't want this version in casual mode at all.
-if SL.Global.GameMode ~= "ITG" or not SL[pn].ActiveModifiers.ShowFaPlusPane then
+-- Not in Casual mode.
+if SL.Global.GameMode ~= "Waterfall" then
 	return
 end
 

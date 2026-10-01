@@ -60,6 +60,9 @@ local t = Def.ActorFrame{
 	end
 }
 
+-- Waterfall lifebars and scoring; loaded first so they're reset before anything reads them.
+t[#t+1] = LoadActor("./Shared/Waterfall.lua")
+
 for player in ivalues(Players) do
 	if not SL[ToEnumShortString(player)].ActiveModifiers.BreakUI then
 		t[#t+1] = LoadActor("./PerPlayer/Danger.lua", player)

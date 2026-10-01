@@ -21,6 +21,14 @@ colors.FullComboW2 = {color("#FDFFC9"), color("#FDDB85")} -- gold combo
 colors.FullComboW3 = {color("#C9FFC9"), color("#94FEC1")} -- green combo
 colors.FullComboW4 = {color("#FFFFFF"), color("#FFFFFF")} -- white combo
 
+-- Waterfall: Mastery, Awesome, Solid and OK full combos
+if SL.Global.GameMode == "Waterfall" then
+	colors.FullComboW1 = {color("#FFC9F0"), color("#FF00BE")} -- fuchsia combo
+	colors.FullComboW2 = {color("#FFFFC9"), color("#FFFF00")} -- yellow combo
+	colors.FullComboW3 = {color("#C9FFC9"), color("#00C800")} -- green combo
+	colors.FullComboW4 = {color("#C9E4FF"), color("#0080FF")} -- blue combo
+end
+
 -- combo colors used in FA+
 if SL.Global.GameMode == "FA+" then
 	colors.FullComboW1 = {color("#C8FFFF"), color("#6BF0FF")} -- blue combo
@@ -34,6 +42,13 @@ solidColors.FullComboW1 = color("#21CCE8")
 solidColors.FullComboW2 = color("#e29c18")
 solidColors.FullComboW3 = color("#66c955")
 solidColors.FullComboW4 = color("#ffffff")
+
+if SL.Global.GameMode == "Waterfall" then
+	solidColors.FullComboW1 = SL.JudgmentColors.Waterfall[1]
+	solidColors.FullComboW2 = SL.JudgmentColors.Waterfall[2]
+	solidColors.FullComboW3 = SL.JudgmentColors.Waterfall[3]
+	solidColors.FullComboW4 = SL.JudgmentColors.Waterfall[4]
+end
 
 if SL.Global.GameMode == "FA+" then
 	solidColors.FullComboW1 = color("1,0.2,0.406,1")

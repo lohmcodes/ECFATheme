@@ -28,19 +28,23 @@ local function GetLamp(high_score_list)
 
 	for score in ivalues(high_score_list:GetHighScores()) do
 		local award = score:GetStageAward()
-		if score:GetGrade() == "Grade_Tier01" then
+		-- (the "quint" lamp only exists for scores saved by ITG mode, which stored its white count in Score)
+		if score:GetGrade() == "Grade_Tier01" and SL.Global.GameMode ~= "Waterfall" then
 			if score:GetPercentDP() == 1.0 and score:GetScore() < score:GetTapNoteScore("TapNoteScore_W1") and score:GetScore() == 0 then
 				award = "StageAward_FullComboW0"
 			end
 		end
 
-		-- NOTE: Below is deprecated since FA+ mode no longer really exists.
-		if award == nil and SL.Global.GameMode == "FA+" and score:GetGrade() ~= "Grade_Failed" then
-			-- Dropping a roll/hold breaks the StageAward, but hitting a mine does not.
+		-- The engine has no award for a full combo with W4s (a Waterfall "Full Combo"
+		-- of OKs), so make one. Waterfall full combos are also broken by mines.
+		if SL.Global.GameMode == "Waterfall" and score:GetGrade() ~= "Grade_Failed" then
 			local misses = score:GetTapNoteScore("TapNoteScore_Miss") +
 					score:GetHoldNoteScore("HoldNoteScore_LetGo") +
-					score:GetTapNoteScore("TapNoteScore_CheckpointMiss")
-			if misses + score:GetTapNoteScore("TapNoteScore_W5") == 0 then
+					score:GetTapNoteScore("TapNoteScore_CheckpointMiss") +
+					score:GetTapNoteScore("TapNoteScore_HitMine")
+			if misses + score:GetTapNoteScore("TapNoteScore_W5") > 0 then
+				award = nil
+			elseif award == nil then
 				award = "StageAward_FullComboW4"
 			end
 		end

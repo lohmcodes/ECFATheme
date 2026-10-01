@@ -75,12 +75,12 @@ SL_CustomPrefs.Get = function()
 		},
 		DefaultGameMode =
 		{
-			Default = "ITG",
+			Default = "Waterfall",
 			Choices = {
 				THEME:GetString("ScreenSelectPlayMode", "Casual"),
-				THEME:GetString("ScreenSelectPlayMode", "ITG"),
+				THEME:GetString("ScreenSelectPlayMode", "Waterfall"),
 			},
-			Values = { "Casual", "ITG" }
+			Values = { "Casual", "Waterfall" }
 		},
 		DefaultSort =
 		{

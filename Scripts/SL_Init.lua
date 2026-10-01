@@ -6,7 +6,7 @@ local PlayerDefaults = {
 			self.ActiveModifiers = {
 				SpeedModType = "M",
 				SpeedMod = 250,
-				JudgmentGraphic = "Love 2x6 (doubleres).png",
+				JudgmentGraphic = "Optimus Dark 1x7 (doubleres).png",
 				HeldGraphic = "None",
 				ComboFont = "Wendy",
 				HoldJudgment = "Love 1x2 (doubleres).png",
@@ -44,6 +44,7 @@ local PlayerDefaults = {
 				ActionOnMissedTarget = "Nothing",
 				Pacemaker = false,
 				LifeMeterType = "Standard",
+				PreferredLifeBar = "Hard",
 				NPSGraphAtTop = false,
 				JudgmentTilt = false,
 				TiltMultiplier = 1,
@@ -176,7 +177,7 @@ local GlobalDefaults = {
 				PlayerOptions4 = Branch.GameplayScreen(),
 			}
 			self.ContinuesRemaining = ThemePrefs.Get("NumberOfContinuesAllowed") or 0
-			self.GameMode = ThemePrefs.Get("DefaultGameMode") or "ITG"
+			self.GameMode = ValidGameMode(ThemePrefs.Get("DefaultGameMode"))
 			self.ScreenshotTexture = nil
 			self.MenuTimer = {
 				ScreenECFACloudLogin  = ThemePrefs.Get("ScreenECFACloudLoginMenuTimer"),
@@ -268,6 +269,17 @@ SL = {
 	},
 	-- These judgment colors are used for text & numbers on dark backgrounds:
 	JudgmentColors = {
+		-- Waterfall judgments: Masterful, Awesome, Solid, OK, Fault, Miss (from Waterfall Expanded)
+		Waterfall = {
+			color("#FF00BE"),	-- fuchsia
+			color("#FFFF00"),	-- yellow
+			color("#00c800"),	-- green
+			color("#0080FF"),	-- blue
+			color("#808080"),	-- gray
+			color("#ff3030")	-- red (slightly lightened)
+		},
+		-- ITG and FA+ colors are still used for the simulated ITG/EX judgments
+		-- (see SimulateITGJudgment in WF-Scoring.lua).
 		Casual = {
 			color("#21CCE8"),	-- blue
 			color("#e29c18"),	-- gold
@@ -294,25 +306,31 @@ SL = {
       color("#ff00cc")	-- pink (hard ex)
 		},
 	},
+	-- Engine Preferences applied for each game mode (see SetGameModePreferences()).
+	-- Plays are judged with Waterfall timing (from Waterfall Expanded, as used by
+	-- ECFA 2021). The ITG and FA+ tables are never applied any more: they're kept
+	-- as reference data for the simulated ITG/EX scores and timing displays.
 	Preferences = {
-		Casual = {
-			TimingWindowAdd=0.0015,
-			RegenComboAfterMiss=0,
-			MaxRegenComboAfterMiss=0,
-			MinTNSToHideNotes="TapNoteScore_W3",
-			HarshHotLifePenalty=true,
+		Waterfall = {
+			TimingWindowAdd=0,
+			TimingWindowScale=1,
+			RegenComboAfterMiss=5,
+			MaxRegenComboAfterMiss=5,
+			MinTNSToHideNotes="TapNoteScore_W4",
+			MinTNSToScoreNotes="TapNoteScore_None",
+			HarshHotLifePenalty=false,
 
 			PercentageScoring=true,
 			AllowW1="AllowW1_Everywhere",
 			SubSortByNumSteps=true,
 
-			TimingWindowSecondsW1=0.021500,
-			TimingWindowSecondsW2=0.043000,
-			TimingWindowSecondsW3=0.102000,
-			TimingWindowSecondsW4=0.102000,
-			TimingWindowSecondsW5=0.102000,
-			TimingWindowSecondsHold=0.320000,
-			TimingWindowSecondsMine=0.070000,
+			TimingWindowSecondsW1=0.015000,
+			TimingWindowSecondsW2=0.030000,
+			TimingWindowSecondsW3=0.050000,
+			TimingWindowSecondsW4=0.100000,
+			TimingWindowSecondsW5=0.160000,
+			TimingWindowSecondsHold=0.300000,
+			TimingWindowSecondsMine=0.071500,
 			TimingWindowSecondsRoll=0.350000,
 		},
 		ITG = {
@@ -377,6 +395,43 @@ SL = {
 		--    which does not award points for held checkpoints, but
 		--    only penalizes missed checkpoints.
 
+		Waterfall = {
+			PercentScoreWeightW1=10,
+			PercentScoreWeightW2=9,
+			PercentScoreWeightW3=6,
+			PercentScoreWeightW4=3,
+			PercentScoreWeightW5=0,
+			PercentScoreWeightMiss=0,
+			PercentScoreWeightLetGo=0,
+			PercentScoreWeightHeld=6,
+			PercentScoreWeightHitMine=-3,
+			PercentScoreWeightCheckpointHit=0,
+
+			GradeWeightW1=10,
+			GradeWeightW2=9,
+			GradeWeightW3=6,
+			GradeWeightW4=3,
+			GradeWeightW5=0,
+			GradeWeightMiss=0,
+			GradeWeightLetGo=0,
+			GradeWeightHeld=6,
+			GradeWeightHitMine=-3,
+			GradeWeightCheckpointHit=0,
+
+			-- The engine's own lifebar never moves: the three Waterfall lifebars
+			-- (Scripts/WF-LifeBars.lua) decide whether a player fails.
+			LifePercentChangeW1=0,
+			LifePercentChangeW2=0,
+			LifePercentChangeW3=0,
+			LifePercentChangeW4=0,
+			LifePercentChangeW5=0,
+			LifePercentChangeMiss=0,
+			LifePercentChangeLetGo=0,
+			LifePercentChangeHeld=0,
+			LifePercentChangeHitMine=0,
+
+			InitialValue=0.5,
+		},
 		Casual = {
 			PercentScoreWeightW1=3,
 			PercentScoreWeightW2=2,
@@ -544,6 +599,21 @@ SL = {
 	ITGmaniaLatestVersion = nil,
 	SimplyLoveLatestVersion = nil,
 }
+
+-- Casual mode plays with Waterfall timing and scoring too; it only differs in
+-- presentation (simplified song select, no lifebar).
+SL.Preferences.Casual = SL.Preferences.Waterfall
+SL.JudgmentColors.Casual = SL.JudgmentColors.Waterfall
+for key, value in pairs(SL.Metrics.Waterfall) do
+	if not key:match("^LifePercentChange") then SL.Metrics.Casual[key] = value end
+end
+
+-- The game modes a player can pick. Old ThemePrefs/profiles may still say "ITG"
+-- or "FA+", which map to Waterfall.
+function ValidGameMode(mode)
+	if mode == "Casual" then return "Casual" end
+	return "Waterfall"
+end
 
 
 

@@ -30,64 +30,69 @@ local GetMachineTag = function(entry)
 	return ""
 end
 
+-- The engine's Waterfall judgments, plus holds/rolls/mines and chart totals.
 local GetJudgmentCounts = function(player)
+	local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats(player)
 	local counts = GetExJudgmentCounts(player)
-	local translation = {
-		["W0"] = "fantasticPlus",
-		["W1"] = "fantastic",
-		["W2"] = "excellent",
-		["W3"] = "great",
-		["W4"] = "decent",
-		["W5"] = "wayOff",
-		["Miss"] = "miss",
-		["totalSteps"] = "totalSteps",
-		["Holds"] = "holdsHeld",
-		["totalHolds"] = "totalHolds",
-		["Mines"] = "minesHit",
-		["totalMines"] = "totalMines",
-		["Rolls"] = "rollsHeld",
-		["totalRolls"] = "totalRolls"
+	local tap = function(w) return pss:GetTapNoteScores("TapNoteScore_"..w) end
+	return {
+		masterful=tap("W1"),
+		awesome=tap("W2"),
+		solid=tap("W3"),
+		ok=tap("W4"),
+		fault=tap("W5"),
+		miss=tap("Miss"),
+		totalSteps=counts.totalSteps,
+		holdsHeld=counts.Holds,
+		totalHolds=counts.totalHolds,
+		minesHit=counts.Mines,
+		totalMines=counts.totalMines,
+		rollsHeld=counts.Rolls,
+		totalRolls=counts.totalRolls,
 	}
-
-	local judgmentCounts = {}
-
-	for key, value in pairs(counts) do
-		if translation[key] ~= nil then
-			judgmentCounts[translation[key]] = value
-		end
-	end
-
-	return judgmentCounts
 end
 
-local GetRescoredJudgmentCounts = function(player)
-	local pn = ToEnumShortString(player)
-
-	local translation = {
-		["W0"] = "fantasticPlus",
-		["W1"] = "fantastic",
-		["W2"] = "excellent",
-		["W3"] = "great",
-		["W4"] = "decent",
-		["W5"] = "wayOff",
+-- The simulated ITG judgments (ITG windows applied to each tap's offset), from
+-- which ECFA Cloud computes the secondary ITG and EX scores.
+local GetSimulatedITGCounts = function(player)
+	local pnum = tonumber(ToEnumShortString(player):sub(-1))
+	local c = SL[ToEnumShortString(player)].Stages.Stats[SL.Global.Stages.PlayedThisGame + 1].ex_counts
+	if not c then return nil end
+	return {
+		fantasticPlus=c.W0,
+		fantastic=c.W1,
+		excellent=c.W2,
+		great=c.W3,
+		decent=c.W4,
+		wayOff=c.W5,
+		miss=c.Miss,
+		held=c.Held,
+		minesHit=c.HitMine,
+		failed=WF.ITGFailed[pnum],
 	}
+end
 
-	local rescored = {
-		["fantasticPlus"] = 0,
-		["fantastic"] = 0,
-		["excellent"] = 0,
-		["great"] = 0,
-		["decent"] = 0,
-		["wayOff"] = 0
+-- The timing windows the engine judged with (ECFA Cloud only accepts Waterfall's).
+local GetTiming = function()
+	local pref = function(name) return PREFSMAN:GetPreference(name) end
+	return {
+		w1=pref("TimingWindowSecondsW1"),
+		w2=pref("TimingWindowSecondsW2"),
+		w3=pref("TimingWindowSecondsW3"),
+		w4=pref("TimingWindowSecondsW4"),
+		w5=pref("TimingWindowSecondsW5"),
+		hold=pref("TimingWindowSecondsHold"),
+		mine=pref("TimingWindowSecondsMine"),
+		roll=pref("TimingWindowSecondsRoll"),
+		scale=pref("TimingWindowScale"),
+		add=pref("TimingWindowAdd"),
 	}
+end
 
-	for i=1,GAMESTATE:GetCurrentStyle():ColumnsPerPlayer() do
-		for window, name in pairs(translation) do
-			rescored[name] = rescored[name] + SL[pn].Stages.Stats[SL.Global.Stages.PlayedThisGame + 1].column_judgments[i]["Early"][window]
-		end
-	end
-
-	return rescored
+-- Final values of the Easy, Normal and Hard lifebars.
+local GetLifeBars = function(player)
+	local life = WF.GetLifeBarValues(tonumber(ToEnumShortString(player):sub(-1)))
+	return { easy=life[1], normal=life[2], hard=life[3] }
 end
 
 -- Plays a random sound from Sounds/<folder>/ (e.g. "Evaluation PB"), if any exist.
@@ -119,7 +124,10 @@ local BuildSubmission = function(player, packInfo, songInfo)
 		rate=tonumber(string.format("%.0f", SL.Global.ActiveModifiers.MusicRate * 100)),
 		score=tonumber(("%.0f"):format(stats:GetPercentDancePoints() * 10000)),
 		judgmentCounts=GetJudgmentCounts(player),
-		rescoreCounts=GetRescoredJudgmentCounts(player),
+		lifebars=GetLifeBars(player),
+		timing=GetTiming(),
+		faPlus={ ms10=WF.FAPlusCount[tonumber(pn:sub(-1))][1], ms12=WF.FAPlusCount[tonumber(pn:sub(-1))][2] },
+		itg=GetSimulatedITGCounts(player),
 		usedCmod=(GAMESTATE:GetPlayerState(pn):GetPlayerOptions("ModsLevel_Preferred"):CMod() ~= nil),
 		comment=CreateCommentString(player),
 		playerOptions=GetPlayerOptionsJsonForECFACloud(player),
@@ -264,8 +272,8 @@ local AutoSubmitRequestProcessor = function(res, ctx)
 					local leaderboardData = nil
 					if showExScore then
 						leaderboardData = playerData["exLeaderboard"]
-					elseif playerData["itgLeaderboard"] then
-						leaderboardData = playerData["itgLeaderboard"]
+					elseif playerData["wfLeaderboard"] then
+						leaderboardData = playerData["wfLeaderboard"]
 					end
 
 					if leaderboardData then
