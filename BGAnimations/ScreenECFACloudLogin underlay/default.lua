@@ -108,7 +108,7 @@ local af = Def.ActorFrame{
     if self.request then self.request:Cancel() end
   end,
 
-  LoadFont("Common Normal")..{
+  LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{
     Text=THEME:GetString("ScreenSelectProfile", "LoginInstructions"),
     InitCommand=function(self)
       self:y(-150)
@@ -117,7 +117,7 @@ local af = Def.ActorFrame{
       end
     end,
   },
-  LoadFont("Common Normal")..{
+  LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{
     Text=THEME:GetString("ScreenSelectProfile", "VisitWebsite"):format(GetECFACloudHost()),
     InitCommand=function(self)
       self:y(-120)
@@ -127,7 +127,7 @@ local af = Def.ActorFrame{
     end,
   },
 
-  LoadFont("Common Bold")..{
+  LoadFont(ThemePrefs.Get("ThemeFont") .. " Bold")..{
     Text=THEME:GetString("ScreenEvaluation", "PressStartToContinue"),
     InitCommand=function(self)
       self:zoom(0.55):y(150):shadowlength(1)
@@ -167,7 +167,7 @@ for player in ivalues(GAMESTATE:GetHumanPlayers()) do
       InitCommand=function(self) self:zoomto(boxWidth - border, boxHeight - border):diffuse(Color.Black) end,
     },
 
-    LoadFont("Common Normal")..{
+    LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{
       Text=SL[pn].ApiKey ~= "" and THEME:GetString("ScreenSelectProfile", "ProfileConnected") or "",
       InitCommand=function(self)
         if ThemePrefs.RainbowMode then

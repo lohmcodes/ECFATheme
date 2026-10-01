@@ -19,7 +19,7 @@ local SetLeaderboardForPlayer = function(player_num, leaderboard, leaderboardDat
 	
 	if leaderboardData["Disabled"] then
 		if leaderboardData["Name"] then
-			local name = leaderboardData["Name"]:gsub("ITL Online", "ITL")
+			local name = leaderboardData["Name"]
 			leaderboard:GetChild("Header"):settext(name)
 		end
 		for j=1, NumEntries do
@@ -46,7 +46,7 @@ local SetLeaderboardForPlayer = function(player_num, leaderboard, leaderboardDat
 
 	if leaderboardData then
 		if leaderboardData["Name"] then
-			local name = leaderboardData["Name"]:gsub("ITL Online", "ITL")
+			local name = leaderboardData["Name"]
 			leaderboard:GetChild("Header"):settext(name)
 		end
 
@@ -60,7 +60,7 @@ local SetLeaderboardForPlayer = function(player_num, leaderboard, leaderboardDat
 						gsEntry["rank"]..".",
 						gsEntry["name"],
 						string.format("%.2f%%", gsEntry["score"]/100),
-						ParseGrooveStatsDate(gsEntry["date"]),
+						ParseECFACloudDate(gsEntry["date"]),
 						entry
 					)
 					if gsEntry["isRival"] then
@@ -187,61 +187,36 @@ local LeaderboardRequestProcessor = function(res, master)
 		local pn = "P"..i
 		local leaderboard = master:GetChild(pn.."Leaderboard")
 		local leaderboardList = master[pn]["Leaderboards"]
-		local boogie = false
-		local boogie_ex = false
-		if res.headers["bs-leaderboard-player-" .. i] == "BS" then
-			boogie = true
-		elseif res.headers["bs-leaderboard-player-" .. i] == "BS-EX" then
-			boogie_ex = true
-		end
 
 		if data[playerStr] then
 			master[pn].isRanked = data[playerStr]["isRanked"]
 
 			-- First add the main leaderboard.
-			if boogie then
-				if data[playerStr]["gsLeaderboard"] then
-					leaderboardList[#leaderboardList + 1] = {
-						Name="BoogieStats",
-						Data=DeepCopy(data[playerStr]["gsLeaderboard"]),
-						IsEX=false
-					}
-					master[pn]["LeaderboardIndex"] = 1
-				end
-			elseif boogie_ex then
-				if data[playerStr]["gsLeaderboard"] then
-					leaderboardList[#leaderboardList + 1] = {
-						Name="BoogieStats",
-						Data=DeepCopy(data[playerStr]["gsLeaderboard"]),
-						IsEX=true
-					}
-					master[pn]["LeaderboardIndex"] = 1
-				end
-			elseif SL["P"..i].ActiveModifiers.ShowExScore then
+			if SL["P"..i].ActiveModifiers.ShowExScore then
 				-- If the player is using EX scoring, then we want to display the EX leaderboard first.
 				if data[playerStr]["exLeaderboard"] then
 					leaderboardList[#leaderboardList + 1] = {
-						Name="GrooveStats",
+						Name="ECFA Cloud",
 						Data=DeepCopy(data[playerStr]["exLeaderboard"]),
 						IsEX=true
 					}
 					master[pn]["LeaderboardIndex"] = 1
 				end
 
-				if data[playerStr]["gsLeaderboard"] then
+				if data[playerStr]["itgLeaderboard"] then
 					leaderboardList[#leaderboardList + 1] = {
-						Name="GrooveStats",
-						Data=DeepCopy(data[playerStr]["gsLeaderboard"]),
+						Name="ECFA Cloud",
+						Data=DeepCopy(data[playerStr]["itgLeaderboard"]),
 						IsEX=false
 					}
 					master[pn]["LeaderboardIndex"] = 1
 				end
 			else
-				-- Display the main GrooveStats leaderboard first if player is not using EX scoring.
-				if data[playerStr]["gsLeaderboard"] then
+				-- Display the main ECFA Cloud leaderboard first if player is not using EX scoring.
+				if data[playerStr]["itgLeaderboard"] then
 					leaderboardList[#leaderboardList + 1] = {
-						Name="GrooveStats",
-						Data=DeepCopy(data[playerStr]["gsLeaderboard"]),
+						Name="ECFA Cloud",
+						Data=DeepCopy(data[playerStr]["itgLeaderboard"]),
 						IsEX=false
 					}
 					master[pn]["LeaderboardIndex"] = 1
@@ -249,7 +224,7 @@ local LeaderboardRequestProcessor = function(res, master)
 				
 				if data[playerStr]["exLeaderboard"] then
 					leaderboardList[#leaderboardList + 1] = {
-						Name="GrooveStats",
+						Name="ECFA Cloud",
 						Data=DeepCopy(data[playerStr]["exLeaderboard"]),
 						IsEX=true
 					}
@@ -258,13 +233,13 @@ local LeaderboardRequestProcessor = function(res, master)
 			end
 
 			-- Then any event leaderboards.
-			local events = {"rpg", "itl"}
-			for event in ivalues(events) do
-				if data[playerStr][event] and data[playerStr][event][event.."Leaderboard"] then
+			-- ECFA Cloud event leaderboards are EX scored.
+			for ev in ivalues(data[playerStr]["events"] or {}) do
+				if ev["leaderboard"] then
 					leaderboardList[#leaderboardList + 1] = {
-						Name=data[playerStr][event]["name"],
-						Data=DeepCopy(data[playerStr][event][event.."Leaderboard"]),
-						IsEX=(event == "itl")
+						Name=ev["name"],
+						Data=DeepCopy(ev["leaderboard"]),
+						IsEX=true
 					}
 					master[pn]["LeaderboardIndex"] = 1
 				end
@@ -353,7 +328,7 @@ local af = Def.ActorFrame{
 			-- If a player does not have an API key or chart hash just show the local leaderboard.
 			for i=1,2 do
 				local pn = "P"..i
-				if SL[pn].ApiKey == "" or SL[pn].Streams.Hash == "" or not IsServiceAllowed(SL.GrooveStats.Leaderboard) then
+				if SL[pn].ApiKey == "" or SL[pn].Streams.Hash == "" or not IsServiceAllowed(SL.ECFACloud.Leaderboard) then
 					local pn = "P"..i
 					local leaderboard = self:GetParent():GetChild(pn.."Leaderboard")
 					local leaderboardList = self:GetParent()[pn]["Leaderboards"]
@@ -366,30 +341,20 @@ local af = Def.ActorFrame{
 					self:GetParent()[pn]["LeaderboardIndex"] = 1
 				end
 			end
-			if not IsServiceAllowed(SL.GrooveStats.Leaderboard) then
-				if SL.GrooveStats.IsConnected then
+			if not IsServiceAllowed(SL.ECFACloud.Leaderboard) then
+				if SL.ECFACloud.IsConnected then
 					-- If we disable the service from a previous request, surface it to the user here.
 					for i=1, 2 do
 						local pn = "P"..i
 						local leaderboard = self:GetParent():GetChild(pn.."Leaderboard")
 						local leaderboardList = self:GetParent()[pn]["Leaderboards"]
 						leaderboardList[#leaderboardList + 1] = {
-							Name="GrooveStats",
+							Name="ECFA Cloud",
 							Disabled=true,
 							IsEX=false
 						}
 						SetLeaderboardForPlayer(i, leaderboard, leaderboardList[1], false)
 					end
-				end
-				-- Still attempt ArrowCloud logging (hash may exist) even if GrooveStats disabled.
-				local hash = ""
-				if SL.P1 and SL.P1.Streams and SL.P1.Streams.Hash ~= "" then
-					hash = SL.P1.Streams.Hash
-				elseif SL.P2 and SL.P2.Streams and SL.P2.Streams.Hash ~= "" then
-					hash = SL.P2.Streams.Hash
-				end
-				if hash ~= "" and ArrowCloudRequest then
-					ArrowCloudRequest(hash)
 				end
 				return
 			end
@@ -411,25 +376,14 @@ local af = Def.ActorFrame{
 			-- Only send the request if it's applicable.
 			-- Technically this should always be true since otherwise we wouldn't even get to this screen.
 			if sendRequest then
-				self:playcommand("MakeGrooveStatsRequest", {
-					endpoint="?action=playerLeaderboards&"..NETWORK:EncodeQueryParameters(query),
+				self:playcommand("MakeECFACloudRequest", {
+					endpoint="player-leaderboards?"..NETWORK:EncodeQueryParameters(query),
 					method="GET",
 					headers=headers,
 					timeout=10,
 					callback=LeaderboardRequestProcessor,
 					args=SCREENMAN:GetTopScreen():GetChild("Overlay"):GetChild("LeaderboardMaster"),
 				})
-			end
-
-			-- ArrowCloud parallel logging request
-			local hash = ""
-			if SL.P1 and SL.P1.Streams and SL.P1.Streams.Hash ~= "" then
-				hash = SL.P1.Streams.Hash
-			elseif SL.P2 and SL.P2.Streams and SL.P2.Streams.Hash ~= "" then
-				hash = SL.P2.Streams.Hash
-			end
-			if hash ~= "" and ArrowCloudRequest then
-				ArrowCloudRequest(hash)
 			end
 		end
 	}
@@ -510,7 +464,7 @@ for player in ivalues( PlayerNumber ) do
 		-- Header Text
 		LoadFont("Wendy/_wendy small").. {
 			Name="Header",
-			Text="GrooveStats",
+			Text="ECFA Cloud",
 			InitCommand=function(self)
 				self:zoom(0.5)
 				self:y(-paneHeight/2 + 12)
@@ -612,7 +566,7 @@ for player in ivalues( PlayerNumber ) do
 
 			LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal").. {
 				Name="Text",
-				Text=THEME:GetString("GrooveStats", "MoreLeaderboards"),
+				Text=THEME:GetString("ECFACloud", "MoreLeaderboards"),
 				InitCommand=function(self)
 					self:diffuse(Color.White)
 				end,
@@ -668,7 +622,7 @@ for player in ivalues( PlayerNumber ) do
 
 			LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal").. {
 				Name="Name",
-				Text=(i==1 and THEME:GetString("GrooveStats", "Loading") or ""),
+				Text=(i==1 and THEME:GetString("ECFACloud", "Loading") or ""),
 				InitCommand=function(self)
 					self:horizalign(center)
 					self:maxwidth(130)
@@ -676,7 +630,7 @@ for player in ivalues( PlayerNumber ) do
 					self:diffuse(Color.White)
 				end,
 				ResetEntryMessageCommand=function(self)
-					self:settext(i==1 and THEME:GetString("GrooveStats", "Loading") or "")
+					self:settext(i==1 and THEME:GetString("ECFACloud", "Loading") or "")
 					self:diffuse(Color.White)
 				end
 			},

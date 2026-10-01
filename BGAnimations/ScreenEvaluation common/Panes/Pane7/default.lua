@@ -1,25 +1,18 @@
--- Pane7 displays QR codes for uploading scores to groovestats.com
+-- Pane7 displays a QR code linking to this chart's leaderboard on ECFA Cloud,
+-- or the reasons this score can't be ranked on ECFA Cloud.
 
 local player, _, ComputedData = unpack(...)
+local pn = ToEnumShortString(player)
 
-local checks, allChecksPassed, badSettings = ValidForGrooveStats(player)
+local checks, allChecksPassed, badSettings = ValidForECFACloud(player)
 
 local url, text = nil, ""
 local X_HasBeenBlinked = false
 
--- GrooveStatsURL.lua returns a formatted URL with some parameters in the query string
 if allChecksPassed then
-
-	-- don't generate the GrooveStats URL twice if only one player is joined
-	-- and we've already generated it for a previous controller's pane
-	-- it involves expensive hash computations
-	if ComputedData and ComputedData.GrooveStatsURL then
-		url = ComputedData.GrooveStatsURL
-	else
-		url = LoadActor("./GrooveStatsURL.lua", player)
-		if ComputedData then ComputedData.GrooveStatsURL = url end
-	end
-
+	-- ComputeChartHash will do no work if we've already hashed this chart.
+	ComputeChartHash(GAMESTATE:GetCurrentSteps(player), pn)
+	url = ("%s/charts/%s"):format(GetECFACloudURL(), SL[pn].Streams.Hash)
 	text = ScreenString("QRInstructions")
 
 else
@@ -92,7 +85,7 @@ pane[#pane+1] = LoadActor("../Pane3/Percentage.lua", player)..{
 }
 
 pane[#pane+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{
-	Text="GrooveStats QR",
+	Text="ECFA Cloud",
 	InitCommand=function(self) self:align(0,0) end
 }
 
@@ -100,7 +93,7 @@ pane[#pane+1] = Def.Quad{
 	InitCommand=function(self) self:y(23):zoomto(96,1):align(0,0):diffuse(1,1,1,0.33) end
 }
 
--- if there are multiple reasons the score was invalid for GrooveStats ranking
+-- if there are multiple reasons the score was invalid for ECFA Cloud ranking
 -- the help text might spill outside the vertical bounds of the pane
 -- hide any such spillover with a mask
 if not allChecksPassed then
@@ -109,7 +102,7 @@ if not allChecksPassed then
 	}
 end
 
--- localized help text, either "use your phone to scan" or "here's why your score was invalid"
+-- localized help text, either "scan to see the leaderboard" or "here's why your score was invalid"
 pane[#pane+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{
 	Text=text,
 	Name="HelpText",

@@ -18,7 +18,7 @@ local args = {
 				--   https://github.com/stepmania/stepmania/blob/1c869edab5/Docs/Themerdocs/ScreenMessages.txt
 
 				-- Force fail the player on this stage, since for some reason it treats the score as a pass
-				-- (and submits to GrooveStats!!) otherwise.
+				-- (and submits to ECFA Cloud!!) otherwise.
 				local pss = STATSMAN:GetCurStageStats():GetPlayerStageStats(player)
 				pss:FailPlayer()
 				

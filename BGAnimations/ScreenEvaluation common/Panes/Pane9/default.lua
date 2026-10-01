@@ -20,7 +20,7 @@ local pane = Def.ActorFrame{
 }
 
 -- Event name
-pane[#pane+1] = LoadFont("Common Bold")..{
+pane[#pane+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Bold")..{
 	Name="EventName",
 	Text=THEME:GetString("ECFACloud", "EventResults"),
 	InitCommand=function(self) self:zoom(0.45):y(-6):maxwidth(560) end,
@@ -28,7 +28,7 @@ pane[#pane+1] = LoadFont("Common Bold")..{
 }
 
 -- Summary lines
-pane[#pane+1] = LoadFont("Common Normal")..{
+pane[#pane+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{
 	Name="Summary",
 	Text=THEME:GetString("ECFACloud", "Waiting"),
 	InitCommand=function(self) self:y(36):vertspacing(-2):maxwidth(300) end,
@@ -64,9 +64,9 @@ for i=1, NumEntries do
 	local row = Def.ActorFrame{
 		Name="Row"..i,
 		InitCommand=function(self) self:y(RowHeight * (i - 1)) end,
-		LoadFont("Common Normal")..{ Name="Rank", InitCommand=function(self) self:x(-120):horizalign(right):maxwidth(40) end },
-		LoadFont("Common Normal")..{ Name="Name", InitCommand=function(self) self:x(-110):horizalign(left):maxwidth(150) end },
-		LoadFont("Common Normal")..{ Name="Score", InitCommand=function(self) self:x(130):horizalign(right) end },
+		LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{ Name="Rank", InitCommand=function(self) self:x(-120):horizalign(right):maxwidth(40) end },
+		LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{ Name="Name", InitCommand=function(self) self:x(-110):horizalign(left):maxwidth(150) end },
+		LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{ Name="Score", InitCommand=function(self) self:x(130):horizalign(right) end },
 	}
 	row.ShowEventCommand=function(self, params)
 		local entry = params.event.leaderboard and params.event.leaderboard[i]

@@ -98,7 +98,7 @@ local PlayerDefaults = {
 			}
 			-- TODO(teejusb): Rename "Streams" as the data contains more information than that.
 			self.Streams = {
-				-- Chart identifiers used to cache the GrooveStats hash so we only
+				-- Chart identifiers used to cache the chart hash so we only
 				-- parse a given chart once.
 				Filename = "",
 				StepsType = "",
@@ -143,13 +143,11 @@ local PlayerDefaults = {
 			self.EvalPanePrimary   = 1 -- large score and judgment counts
 			self.EvalPaneSecondary = 5 -- offset histogram
 
-			-- The GrooveStats API key loaded for this player
+			-- The ECFA Cloud API key loaded for this player (ECFACloud.ini)
 			self.ApiKey = ""
-			self.GrooveStatsUsername = ""
+			self.ECFACloudUsername = ""
 			-- Whether or not the player is playing on pad.
 			self.IsPadPlayer = false
-			-- ArrowCloud API key (loaded from ArrowCloud.ini per profile)
-			self.ArrowCloudApiKey = ""
 			self.Favorites = {}
 		end
 	}
@@ -181,7 +179,7 @@ local GlobalDefaults = {
 			self.GameMode = ThemePrefs.Get("DefaultGameMode") or "ITG"
 			self.ScreenshotTexture = nil
 			self.MenuTimer = {
-				ScreenGrooveStatsLogin  = ThemePrefs.Get("ScreenGrooveStatsLoginMenuTimer"),
+				ScreenECFACloudLogin  = ThemePrefs.Get("ScreenECFACloudLoginMenuTimer"),
 				ScreenSelectMusic       = ThemePrefs.Get("ScreenSelectMusicMenuTimer"),
 				ScreenSelectMusicCasual = ThemePrefs.Get("ScreenSelectMusicCasualMenuTimer"),
 				ScreenPlayerOptions     = ThemePrefs.Get("ScreenPlayerOptionsMenuTimer"),
@@ -202,7 +200,7 @@ local GlobalDefaults = {
 			self.ColumnCueMinTime = 1.5
 
 			-- TODO(teejusb): We should only initialize this once to save on compute.
-			self.GrooveStatsPlayerOptionKeys = CreateGrooveStatsPlayerOptionKeys()
+			self.ECFACloudPlayerOptionKeys = CreateECFACloudPlayerOptionKeys()
 
 			-- used to track active OptionRow index when navigating the Operator Menu's many screens and sub-screens
 			-- shaped like: { ScreenOptionsService=3, ScreenVisualOptions=1 }
@@ -214,13 +212,6 @@ local GlobalDefaults = {
 		ActiveColorIndex = ThemePrefs.Get("SimplyLoveColor") or 1,
 	}
 }
-
--- Preserve any previously-defined extension tables (like ArrowCloud) that may
--- have been initialized in helper scripts loaded earlier. Previously we
--- overwrote SL entirely here which discarded SL.ArrowCloud, causing later
--- checks like (SL.ArrowCloud and SL.ArrowCloud.Enabled) to evaluate false.
--- Capture a reference before reassigning SL, then restore it below.
-local _ArrowCloud = SL and SL.ArrowCloud
 
 SL = {
 	P1 = setmetatable( {}, PlayerDefaults),
@@ -520,23 +511,24 @@ SL = {
 		HitMine=-1
 	},
 	-- Fields used to determine whether or not we can connect to the
-	-- GrooveStats services.
-	GrooveStats = {
-		-- Whether we're connected to the internet or not.
-		-- Determined once on boot in ScreenSystemLayer.
+	-- ECFA Cloud services.
+	ECFACloud = {
+		-- Whether we're connected to ECFA Cloud or not.
+		-- Determined on ScreenTitleMenu in ScreenSystemLayer.
 		IsConnected = false,
 
-		-- Available GrooveStats services. Subject to change while
+		-- Available ECFA Cloud services. Subject to change while
 		-- StepMania is running.
 		GetScores = false,
 		Leaderboard = false,
 		AutoSubmit = false,
 
-		-- ************* CURRENT QR VERSION *************
-		-- * Update whenever we change relevant QR code *
-		-- *  and when GrooveStats backend is also      *
-		-- *   updated to properly consume this value.  *
-		-- **********************************************
+		-- Whether ECFA Cloud events are running (server feature flag). Controls
+		-- the event results pane on ScreenEvaluation.
+		Events = false,
+
+		-- Version of the chart hash algorithm (see SL-ChartParser.lua).
+		-- The server rejects hashes from a different version.
 		ChartHashVersion = 3,
 
 		-- We want to cache the some of the requests/responses to prevent making the
@@ -546,49 +538,13 @@ SL = {
 		--   Response: string, the JSON-ified response to cache
 		--   Timestamp: number, when the request was made
 		RequestCache = {},
-
-		-- Used to prevent redundant downloads for SRPG unlocks.
-		-- Each entry is keyed on the URL of the download which maps to a table of
-		-- PackNames the unlock has been unpacked to.
-		-- To see if we have already downloaded an unlock, one can just key on
-		-- SL.UnlocksCache[url][packName]
-		-- LoadUnlocksCache() is defined in SL-Helpers-GrooveStats.lua so that must
-		-- be loaded before this file.
-		UnlocksCache = LoadUnlocksCache(),
 	},
-	-- Stores all active/failed downloads.
-	-- Each entry is keyed on a string UUID which maps to a table with the
-	-- following keys:
-	--    Request: HttpRequestFuture, the closure returned by NETWORK:HttpRequest
-	--    Name: string, an identifier for this download.
-	--    Url: string, The URL of the download.
-	--    Destination: string, where the download should be unpacked to.
-	--    CurrentBytes: number, the bytes downloaded so far
-	--    TotalBytes: number, the total bytes of the file
-	--    Complete: bool, whether or not the download has completed
-	--              (either success or failure).
-	-- If a request fails, there will be another key:
-	--    ErrorMessage: string, the reasoning for the failure.
-	Downloads = {},
 
 	-- Latest versions available for ITGmania and Simply Love.
 	ITGmaniaLatestVersion = nil,
 	SimplyLoveLatestVersion = nil,
 }
 
--- Restore preserved ArrowCloud config (if any) or ensure a default table.
-if _ArrowCloud then
-	SL.ArrowCloud = _ArrowCloud
-elseif not SL.ArrowCloud then
-	SL.ArrowCloud = {
-		Enabled = true,
-		BaseURL = "https://api.arrowcloud.dance",
-		RequestTimeout = 5,
-		LogPath = THEME:GetCurrentThemeDirectory() .. "Other/ArrowCloud_Responses.ndjson"
-	}
-end
-
--- (debug removed) 
 
 
 -- Initialize preferences by calling this method.  We typically do

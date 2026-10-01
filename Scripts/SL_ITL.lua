@@ -507,9 +507,9 @@ UpdateItlData = function(player)
 	local pn = ToEnumShortString(player)
 	local stats = STATSMAN:GetCurStageStats():GetPlayerStageStats(player)
 		
-	-- Do the same validation as GrooveStats.
+	-- Do the same validation as ECFA Cloud.
 	-- This checks important things like timing windows, addition/removal of arrows, etc.
-	local _, valid, _ = ValidForGrooveStats(player)
+	local _, valid, _ = ValidForECFACloud(player)
 
 	-- ITL additionally requires the music rate to be 1.00x.
 	local so = GAMESTATE:GetSongOptionsObject("ModsLevel_Song")

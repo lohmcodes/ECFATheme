@@ -78,10 +78,10 @@ Branch.AfterSelectProfile = function()
 			break
 		end
 	end
-	if (SL.GrooveStats.IsConnected and
+	if (SL.ECFACloud.IsConnected and
 	    (ThemePrefs.Get("QRLogin") == "Always" or
 			 (ThemePrefs.Get("QRLogin") == "Sometimes" and not allApiKeys))) then
-		return "ScreenGrooveStatsLogin"
+		return "ScreenECFACloudLogin"
 	else
 		return Branch.AllowScreenSelectColor()
 	end

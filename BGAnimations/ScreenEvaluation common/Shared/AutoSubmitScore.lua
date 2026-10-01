@@ -1,4 +1,11 @@
-if not IsServiceAllowed(SL.GrooveStats.AutoSubmit) or GAMESTATE:IsCourseMode() then return end
+-- Submits each player's score to ECFA Cloud after a song, shows the results
+-- (leaderboard, PB/WR, event results), uploads missing pack/song banners, and
+-- queues scores that couldn't be submitted for later (Scripts/SL-ECFACloud-Pending.lua).
+
+if GAMESTATE:IsCourseMode() or not ThemePrefs.Get("EnableECFACloud") then return end
+
+-- When ECFA Cloud is unreachable we still queue eligible scores for later.
+local online = IsServiceAllowed(SL.ECFACloud.AutoSubmit)
 
 local NumEntries = math.min(10, PREFSMAN:GetPreference("MaxHighScoresPerListForMachine"))
 
@@ -11,19 +18,15 @@ local SetEntryText = function(rank, name, score, date, actor)
 	actor:GetChild("Date"):settext(date)
 end
 
-local GetMachineTag = function(gsEntry)
-	if not gsEntry then return end	
-	-- Groovestats username.
-	if gsEntry["name"] then
-		-- 4 Characters is the "intended" length.
-		return gsEntry["name"]
+-- Show the full ECFA Cloud username, falling back to the machine tag.
+local GetMachineTag = function(entry)
+	if not entry then return end
+	if entry["name"] then
+		return entry["name"]
 	end
-
-	if gsEntry["machineTag"] then
-		-- User doesn't have a username (?).
-		return gsEntry["machineTag"]:sub(1, 4):upper()
+	if entry["machineTag"] then
+		return entry["machineTag"]:sub(1, 4):upper()
 	end
-
 	return ""
 end
 
@@ -77,7 +80,7 @@ local GetRescoredJudgmentCounts = function(player)
 		["decent"] = 0,
 		["wayOff"] = 0
 	}
-	
+
 	for i=1,GAMESTATE:GetCurrentStyle():ColumnsPerPlayer() do
 		for window, name in pairs(translation) do
 			rescored[name] = rescored[name] + SL[pn].Stages.Stats[SL.Global.Stages.PlayedThisGame + 1].column_judgments[i]["Early"][window]
@@ -87,102 +90,115 @@ local GetRescoredJudgmentCounts = function(player)
 	return rescored
 end
 
-local AttemptDownloads = function(res)
-	local data = JsonDecode(res.body)
-	for i=1,2 do
-		local playerStr = "player"..i
-		local events = {"rpg", "itl"}
-		local player = "PlayerNumber_P"..i
-		local itlDownloadsFound = false
+-- Plays a random sound from Sounds/<folder>/ (e.g. "Evaluation PB"), if any exist.
+local PlayRandomSound = function(folder)
+	local files = findFiles(THEME:GetCurrentThemeDirectory() .. "Sounds/" .. folder .. "/")
+	if #files > 0 then
+		SOUND:PlayOnce(files[math.random(#files)])
+	end
+end
 
+-- Builds one player's submission, or nil if their score shouldn't be submitted.
+-- Returns chartHash, submission.
+local BuildSubmission = function(player, packInfo, songInfo)
+	local pn = ToEnumShortString(player)
+	if not (GAMESTATE:IsHumanPlayer(player) and GAMESTATE:IsSideJoined(player)) then return nil end
+	if SL[pn].ApiKey == "" or not SL[pn].IsPadPlayer then return nil end
 
-		for event in ivalues(events) do
-			if data and data[playerStr] and data[playerStr][event] then
-				local eventData = data[playerStr][event]
-				local eventName = eventData["name"] or "Unknown Event"
-			
-				-- See if any quests were completed.
-				if eventData["progress"] and eventData["progress"]["questsCompleted"] then
-					local quests = eventData["progress"]["questsCompleted"]
-					-- Iterate through the quests...
-					for quest in ivalues(quests) do
-						-- ...and check for any unlocks.
-						if quest["songDownloadUrl"] then
-							local url = quest["songDownloadUrl"]
-							local title = quest["title"] or ""
+	local _, valid, _ = ValidForECFACloud(player)
+	local stats = STATSMAN:GetCurStageStats():GetPlayerStageStats(player)
+	if not valid or stats:GetFailed() then return nil end
 
-							if ThemePrefs.Get("SeparateUnlocksByPlayer") then
-								local profileName = "NoName"
-								if (PROFILEMAN:IsPersistentProfile(player) and
-										PROFILEMAN:GetProfile(player)) then
-									profileName = PROFILEMAN:GetProfile(player):GetDisplayName()
-								end
-								title = title.." - "..profileName
-								DownloadEventUnlock(url, "["..eventName.."] "..title, eventName.." Unlocks - "..profileName)
-							else
-								DownloadEventUnlock(url, "["..eventName.."] "..title, eventName.." Unlocks")
-							end
-						end
-					end
-				end
+	-- The hash is normally computed in Select Music; make sure we have it.
+	if SL[pn].Streams.Hash == "" then
+		ComputeChartHash(GAMESTATE:GetCurrentSteps(player), pn)
+	end
+	if SL[pn].Streams.Hash == "" then return nil end
+
+	return SL[pn].Streams.Hash, {
+		rate=tonumber(string.format("%.0f", SL.Global.ActiveModifiers.MusicRate * 100)),
+		score=tonumber(("%.0f"):format(stats:GetPercentDancePoints() * 10000)),
+		judgmentCounts=GetJudgmentCounts(player),
+		rescoreCounts=GetRescoredJudgmentCounts(player),
+		usedCmod=(GAMESTATE:GetPlayerState(pn):GetPlayerOptions("ModsLevel_Preferred"):CMod() ~= nil),
+		comment=CreateCommentString(player),
+		playerOptions=GetPlayerOptionsJsonForECFACloud(player),
+		chart=GetChartInfoForECFACloud(player),
+		song=songInfo,
+		pack=packInfo,
+	}
+end
+
+-- Banners ECFA Cloud has already asked for this session (upload each only once).
+local uploadedBanners = {}
+
+-- Fills Pane9 (event results) and the one-line event summary for one side.
+local ShowEventResults = function(overlay, i, events)
+	local panes = overlay:GetChild("Panes")
+	local eventPane = panes and panes:GetChild("Pane9_SideP"..i)
+	eventPane = eventPane and eventPane:GetChild("")
+	local summary = overlay:GetChild("AutoSubmitMaster"):GetChild("P"..i.."EventText")
+
+	if not events or #events == 0 then
+		if eventPane then eventPane:playcommand("NoEvent") end
+		return
+	end
+
+	-- Show the first event on the pane; list every event in the summary line.
+	if eventPane then eventPane:playcommand("ShowEvent", { event=events[1] }) end
+	if summary and GAMESTATE:IsSideJoined("PlayerNumber_P"..i) then
+		local parts = {}
+		for e in ivalues(events) do
+			local rank = e.rank and ("#"..e.rank) or "unranked"
+			if e.rank and e.previousRank and e.previousRank > e.rank then
+				rank = rank.." ▲"..(e.previousRank - e.rank)
 			end
+			local delta = e.rankingPointsDelta or 0
+			parts[#parts+1] = ("%s · %s RP · %s"):format(e.name, (delta >= 0 and "+" or "")..delta, rank)
+		end
+		summary:settext(table.concat(parts, "   "))
+		summary:visible(true)
+		DiffuseEmojis(summary)
+	end
+end
+
+-- Queues the given submissions for later and tells each player.
+local QueueForLater = function(master, submissions)
+	for i, s in pairs(submissions) do
+		local result = ECFACloudSavePending(s.player, s.chartHash, s.submission)
+		local text = master:GetChild("P"..i.."SubmitText")
+		if text then
+			text:playcommand(result == "full" and "QueueFull" or (result and "Queued" or "SubmitFailed"),
+				{ count=ECFACloudPendingCount(s.player) })
 		end
 	end
 end
 
-local ScreenshotQR = function(playernum)
-	-- format a localized month string like "06-June" or "12-Diciembre"
-	local month = ("%02d-%s"):format(MonthOfYear()+1, THEME:GetString("Months", "Month"..MonthOfYear()+1))
-
-	-- get the FullTitle of the song or course that was just played
-	local title = GAMESTATE:IsCourseMode() and GAMESTATE:GetCurrentCourse():GetDisplayFullTitle() or GAMESTATE:GetCurrentSong():GetDisplayFullTitle()
-
-	-- song titles can be very long, and the engine's SaveScreenshot() function
-	-- is already hardcoded to make the filename long via DateTime::GetNowDateTime()
-	-- so, let's use only the first 25 characters of the title in the screenshot filename
-	title = title:utf8sub(1,25)
-
-	-- substitute all symbols with underscores to avoid file name conflicts
-	title = title:gsub("%W", "_")
-
-	-- organize screenshots Love into directories, like...
-	--      ./Screenshots/Simply_Love/2020/04-April/DVNO-2020-04-22_175951.png
-	-- note that the engine's SaveScreenshot() function will convert whitespace
-	-- characters to underscores, so we might as well just use underscores here
-	local prefix = "Simply_Love/QRCodes/" .. Year() .. "/" .. month .. "/"
-	local suffix = "_" .. title
-
-	-- attempt to write a screenshot to disk
-	-- arg1 is playernumber that requsted the screenshot; if they are using a profile, the screenshot will be saved there
-	-- arg2 is a boolean for whether to use lossy compression on the screenshot before writing to disk
-	-- arg3 is a boolean for whther to have CRYPTMAN use the machine's private key to sign the screenshot
-	--      (there is currently no online system in place that I know that would benefit from that^)
-	-- arg4 is an optional string to prefix the filename with
-	-- arg5 is an optional string to append to the end of the filename
-	--
-	-- first return value is boolean indicating success/failure to write to disk
-	-- second return value is
-	--     (directory + filename) if write to disk was successful
-	--     (filename)             if write to disk failed
-		
-	local success, path = SaveScreenshot(playernum, false, false , prefix, suffix)
-
-	if success then
-		MESSAGEMAN:Broadcast("ScreenshotCurrentScreen")
-		SM("Automatically saved QR screenshot")
+-- After a successful submission, send any plays queued while offline.
+local RetryQueued = function(master, players)
+	for i, player in pairs(players) do
+		if ECFACloudPendingCount(player) > 0 then
+			ECFACloudRetryPending(player, SL[ToEnumShortString(player)].ApiKey, function(remaining)
+				local pending = master:GetChild("P"..i.."PendingText")
+				if pending then pending:playcommand("Update", { count=remaining }) end
+			end)
+		end
 	end
 end
 
-local AutoSubmitRequestProcessor = function(res, overlay)
-	local P1SubmitText = overlay:GetChild("AutoSubmitMaster"):GetChild("P1SubmitText")
-	local P2SubmitText = overlay:GetChild("AutoSubmitMaster"):GetChild("P2SubmitText")
+local AutoSubmitRequestProcessor = function(res, ctx)
+	local overlay = ctx.overlay
+	local master = overlay:GetChild("AutoSubmitMaster")
+	local P1SubmitText = master:GetChild("P1SubmitText")
+	local P2SubmitText = master:GetChild("P2SubmitText")
 
 	if res.error or res.statusCode ~= 200 then
-		local error = res.error and ToEnumShortString(res.error) or nil
-		if error == "Timeout" then
-			if P1SubmitText then P1SubmitText:queuecommand("TimedOut") end
-			if P2SubmitText then P2SubmitText:queuecommand("TimedOut") end
-		elseif error or (res.statusCode ~= nil and res.statusCode ~= 200) then
+		local code = res.statusCode or 0
+		if res.error or code == 0 or code == 429 or code >= 500 then
+			-- ECFA Cloud unreachable or temporarily failing: keep the scores for later.
+			QueueForLater(master, ctx.submissions)
+		else
+			-- Rejected outright; retrying wouldn't help.
 			if P1SubmitText then P1SubmitText:queuecommand("SubmitFailed") end
 			if P2SubmitText then P2SubmitText:queuecommand("SubmitFailed") end
 		end
@@ -190,33 +206,19 @@ local AutoSubmitRequestProcessor = function(res, overlay)
 	end
 
 	local panes = overlay:GetChild("Panes")
-	local shouldDisplayOverlay = false
+	local data = JsonDecode(res.body)
+	local succeeded = {}
 
-	-- Hijack the leaderboard pane to display the GrooveStats leaderboards.
+	-- Hijack the leaderboard pane to display the ECFA Cloud leaderboards.
 	if panes then
-		local data = JsonDecode(res.body)
-		local headers = res.headers
 		for i=1,2 do
 			local playerStr = "player"..i
 			local entryNum = 1
 			local rivalNum = 1
-			-- Pane 8 is the groovestats highscores pane.
+			-- Pane 8 is the ECFA Cloud highscores pane.
 			local highScorePane = panes:GetChild("Pane8_SideP"..i):GetChild("")
 			local QRPane = panes:GetChild("Pane7_SideP"..i):GetChild("")
 
-			local RPGPane = panes:GetChild("Pane9_SideP"..i):GetChild("")
-			local ITLPane = panes:GetChild("Pane10_SideP"..i):GetChild("")
-
-			local boogie = false
-			local boogie_ex = false
-			if headers["bs-leaderboard-player-" .. i] == "BS" then
-				boogie = true
-				MESSAGEMAN:Broadcast("BoogieLogo",{ player = i })
-			elseif headers["bs-leaderboard-player-" .. i] == "BS-EX" then
-				boogie_ex = true
-				MESSAGEMAN:Broadcast("BoogieEXLogo",{ player = i })
-			end
-		
 			-- If only one player is joined, we then need to update both panes with only
 			-- one players' data.
 			local side = i
@@ -229,57 +231,90 @@ local AutoSubmitRequestProcessor = function(res, overlay)
 				playerStr = "player"..side
 			end
 
-			if data and data[playerStr] then
+			local submitText = (side == 1) and P1SubmitText or P2SubmitText
+			local playerData = data and data[playerStr]
+
+			if playerData and playerData["error"] then
+				-- The server rejected this player's submission (e.g. revoked API key).
+				if ToEnumShortString("PLAYER_P"..i) == "P"..side and submitText then
+					submitText:queuecommand("SubmitFailed")
+				end
+			elseif playerData then
+				if ToEnumShortString("PLAYER_P"..i) == "P"..side and ctx.submissions[side] then
+					succeeded[side] = ctx.submissions[side].player
+				end
+
+				-- ECFA Events results for this play (empty when the chart isn't in an open event).
+				ShowEventResults(overlay, i, playerData["events"])
+
+				-- Upload any pack/song banners ECFA Cloud doesn't have yet.
+				for hash in ivalues(playerData["missingBanners"] or {}) do
+					if not uploadedBanners[hash] and ctx.bannerPaths[hash] then
+						uploadedBanners[hash] = true
+						UploadBannerToECFACloud(hash, ctx.bannerPaths[hash], ctx.apiKeys[side])
+					end
+				end
+
 				-- And then also ensure that the chart hash matches the currently parsed one.
 				-- It's better to just not display anything than display the wrong scores.
-				if SL["P"..side].Streams.Hash == data[playerStr]["chartHash"] then
+				if SL["P"..side].Streams.Hash == playerData["chartHash"] then
 					local personalRank = nil
-					local showExScore = SL["P"..side].ActiveModifiers.ShowExScore and data[playerStr]["exLeaderboard"]
+					local showExScore = SL["P"..side].ActiveModifiers.ShowExScore and playerData["exLeaderboard"]
 
 					local leaderboardData = nil
 					if showExScore then
-						leaderboardData = data[playerStr]["exLeaderboard"]
-					elseif data[playerStr]["gsLeaderboard"] then
-						leaderboardData = data[playerStr]["gsLeaderboard"]
+						leaderboardData = playerData["exLeaderboard"]
+					elseif playerData["itgLeaderboard"] then
+						leaderboardData = playerData["itgLeaderboard"]
 					end
 
 					if leaderboardData then
-						for gsEntry in ivalues(leaderboardData) do
+						for entryData in ivalues(leaderboardData) do
+							if entryNum > NumEntries then break end
 							local entry = highScorePane:GetChild("HighScoreList"):GetChild("HighScoreEntry"..entryNum)
 							entry:stoptweening()
 							entry:diffuse(Color.White)
 							SetEntryText(
-								gsEntry["rank"]..".",
-								GetMachineTag(gsEntry),
-								string.format("%.2f%%", gsEntry["score"]/100),
-								ParseGrooveStatsDate(gsEntry["date"]),
+								entryData["rank"]..".",
+								GetMachineTag(entryData),
+								string.format("%.2f%%", entryData["score"]/100),
+								ParseECFACloudDate(entryData["date"]),
 								entry
 							)
 
-							-- TODO(teejusb): Determine how we want to easily display EX scores.
-							-- For now just highlight blue because it's simple.
+							-- Highlight EX scores in blue.
 							if showExScore then
 								entry:GetChild("Score"):diffuse(SL.JudgmentColors["ITG"][1])
 							else
 								entry:GetChild("Score"):diffuse(Color.White)
 							end
 
-							if gsEntry["isRival"] then
+							if entryData["isRival"] then
 								entry:diffuse(color("#BD94FF"))
 								rivalNum = rivalNum + 1
-							elseif gsEntry["isSelf"] then
+							elseif entryData["isSelf"] then
 								entry:diffuse(color("#A1FF94"))
-								personalRank = gsEntry["rank"]
+								personalRank = entryData["rank"]
 							end
 
-							if gsEntry["isFail"] then
+							if entryData["isFail"] then
 								entry:GetChild("Score"):diffuse(Color.Red)
 							end
 							entryNum = entryNum + 1
 						end
 
-						QRPane:GetChild("QRCode"):queuecommand("Hide")
-						QRPane:GetChild("HelpText"):settext(THEME:GetString("GrooveStats", "ScoreAlreadySubmitted"))
+						-- Empty out any remaining entries.
+						for j=entryNum, NumEntries do
+							local entry = highScorePane:GetChild("HighScoreList"):GetChild("HighScoreEntry"..j)
+							entry:stoptweening()
+							if j == 1 then
+								SetEntryText("", "No Scores", "", "", entry)
+							else
+								SetEntryText("---", "----", "------", "----------", entry)
+							end
+						end
+
+						QRPane:GetChild("HelpText"):settext(THEME:GetString("ECFACloud", "ScoreAlreadySubmitted"))
 						if i == 1 and P1SubmitText then
 							P1SubmitText:queuecommand("Submit")
 						elseif i == 2 and P2SubmitText then
@@ -287,301 +322,108 @@ local AutoSubmitRequestProcessor = function(res, overlay)
 						end
 					end
 
-					if data[playerStr]["rpg"] then
-						local rpgEntry = 1
-						local rpgRival = 1
-						for gsEntry in ivalues(data[playerStr]["rpg"]["rpgLeaderboard"]) do
-							local entry = RPGPane:GetChild("HighScoreList"):GetChild("HighScoreEntry"..rpgEntry)
-							entry:stoptweening()
-							entry:diffuse(Color.White)
-							SetEntryText(
-								gsEntry["rank"]..".",
-								GetMachineTag(gsEntry),
-								string.format("%.2f%%", gsEntry["score"]/100),
-								ParseGrooveStatsDate(gsEntry["date"]),
-								entry
-							)
-							if gsEntry["isRival"] then
-								entry:diffuse(color("#BD94FF"))
-								rpgRival = rpgRival + 1
-							elseif gsEntry["isSelf"] then
-								entry:diffuse(color("#A1FF94"))
-								-- personalRank = gsEntry["rank"]
-							end
-
-							if gsEntry["isFail"] then
-								entry:GetChild("Score"):diffuse(Color.Red)
-							end
-							rpgEntry = rpgEntry + 1
-						end
-					end
-
-					if data[playerStr]["itl"] then
-						local itlEntry = 1
-						local itlRival = 1
-						for gsEntry in ivalues(data[playerStr]["itl"]["itlLeaderboard"]) do
-							local entry = ITLPane:GetChild("HighScoreList"):GetChild("HighScoreEntry"..itlEntry)
-							entry:stoptweening()
-							entry:diffuse(Color.White)
-							SetEntryText(
-								gsEntry["rank"]..".",
-								GetMachineTag(gsEntry),
-								string.format("%.2f%%", gsEntry["score"]/100),
-								ParseGrooveStatsDate(gsEntry["date"]),
-								entry
-							)
-							-- ITL leaderboard is EX scores, so highlight them blue.
-							entry:GetChild("Score"):diffuse(SL.JudgmentColors["FA+"][1])
-							if gsEntry["isRival"] then
-								entry:diffuse(color("#BD94FF"))
-								itlRival = itlRival + 1
-							elseif gsEntry["isSelf"] then
-								entry:diffuse(color("#A1FF94"))
-								-- personalRank = gsEntry["rank"]
-							end
-
-							if gsEntry["isFail"] then
-								entry:GetChild("Score"):diffuse(Color.Red)
-							end
-							itlEntry = itlEntry + 1
-						end
-					end
-
-					-- Only display the overlay on the sides that are actually joined.
-					if ToEnumShortString("PLAYER_P"..i) == "P"..side and (data[playerStr]["rpg"] or data[playerStr]["itl"]) then
-						local eventAf = overlay:GetChild("AutoSubmitMaster"):GetChild("EventOverlay"):GetChild("P"..i.."EventAf")
-						eventAf:playcommand("Show", {data=data[playerStr]})
-						shouldDisplayOverlay = true
-
-						if data[playerStr]["itl"] then
-							-- Check for downloadFolders
-							local itlData = data[playerStr]["itl"]
-							if itlData["progress"] and itlData["progress"]["questsCompleted"] then
-								local quests = itlData["progress"]["questsCompleted"]
-								local hasDownloadFolders = false
-								for quest in ivalues(quests) do
-									if quest["songDownloadFolders"] then
-										local downloadFolders = quest["songDownloadFolders"]
-										UpdateItlUnlocks("PlayerNumber_P"..side, downloadFolders)
-										hasDownloadFolders = true
-									end
-								end
-								if hasDownloadFolders then
-									-- Write out the file if we found any download unlocks.
-									WriteItlFile("PlayerNumber_P"..side)
-								end
-							end
-						end
-					end
-
 					-- Only update PB/WR messages on the side that is joined
 					if ToEnumShortString("PLAYER_P"..i) == "P"..side then
 						local upperPane = overlay:GetChild("P"..side.."_AF_Upper")
 						if upperPane then
-							if data[playerStr]["result"] == "score-added" or data[playerStr]["result"] == "improved" then
-								local recordText = overlay:GetChild("AutoSubmitMaster"):GetChild("P"..side.."RecordText")
-								local GSIcon = overlay:GetChild("AutoSubmitMaster"):GetChild("P"..side.."GrooveStats_Logo")
-								local BSIcon = overlay:GetChild("AutoSubmitMaster"):GetChild("P"..side.."BoogieStats_Logo")
-								local BSEXIcon = overlay:GetChild("AutoSubmitMaster"):GetChild("P"..side.."BoogieStatsEX_Logo")
+							if playerData["result"] == "score-added" or playerData["result"] == "improved" then
+								local recordText = master:GetChild("P"..side.."RecordText")
+								local logo = master:GetChild("P"..side.."ECFACloud_Logo")
 
 								recordText:visible(true)
-
-								if boogie then BSIcon:visible(true)
-								elseif boogie_ex then BSEXIcon:visible(true)
-								else GSIcon:visible(true) end
-
+								logo:visible(true)
 								recordText:diffuseshift():effectcolor1(Color.White):effectcolor2(Color.Yellow):effectperiod(3)
-								local soundDir = THEME:GetCurrentThemeDirectory() .. "Sounds/"
 								if personalRank == 1 then
-									local worldRecordText = THEME:GetString("GrooveStats", "WorldRecord")
+									local worldRecordText = THEME:GetString("ECFACloud", "WorldRecord")
 									if showExScore then
 										worldRecordText = worldRecordText .. " (EX)"
 									end
 									recordText:settext(worldRecordText)
-									-- Play random sound in Sounds/Evaluation WR/
-									soundDir = soundDir .. "Evaluation WR/"
-									audio_files = findFiles(soundDir)
-									if #audio_files > 0 then
-										SOUND:PlayOnce(audio_files[math.random(#audio_files)])
-									end
+									PlayRandomSound("Evaluation WR")
 								else
-									recordText:settext(THEME:GetString("GrooveStats", "PersonalBest"))
-									-- Play random sound in Sounds/Evaluation PB/
-									soundDir = soundDir .. "Evaluation PB/"
-									audio_files = findFiles(soundDir)
-									if #audio_files > 0 then
-										SOUND:PlayOnce(audio_files[math.random(#audio_files)])
-									end
+									recordText:settext(THEME:GetString("ECFACloud", "PersonalBest"))
+									PlayRandomSound("Evaluation PB")
 								end
 								local recordTextXStart = recordText:GetX() - recordText:GetWidth()*recordText:GetZoom()/2
-								local GSIconWidth = GSIcon:GetWidth()*GSIcon:GetZoom()
-								local BSIconWidth = BSIcon:GetWidth()*BSIcon:GetZoom()
-								local BSEXIconWidth = BSEXIcon:GetWidth()*BSEXIcon:GetZoom()
+								local logoWidth = logo:GetWidth()*logo:GetZoom()
 								-- This will automatically adjust based on the length of the recordText length.
-								GSIcon:xy(recordTextXStart - GSIconWidth/2, recordText:GetY())
-								BSIcon:xy(recordTextXStart - BSIconWidth/2, recordText:GetY())
-								BSEXIcon:xy(recordTextXStart - BSEXIconWidth/2, recordText:GetY())
+								logo:xy(recordTextXStart - logoWidth/2, recordText:GetY())
 							end
 						end
-					end
-				end
-			end
-
-			-- Empty out any remaining entries on a successful response.
-			-- For failed responses we fallback to the scores available in the machine.
-			if res["status"] == "success" then
-				for j=entryNum, NumEntries do
-					local entry = highScorePane:GetChild("HighScoreList"):GetChild("HighScoreEntry"..j)
-					entry:stoptweening()
-					-- We didn't get any scores if i is still == 1.
-					if j == 1 then
-						SetEntryText("", "No Scores", "", "", entry)
-					else
-						-- Empty out the remaining rows.
-						SetEntryText("---", "----", "------", "----------", entry)
 					end
 				end
 			end
 		end
 	end
 
-	if shouldDisplayOverlay then
-		overlay:GetChild("AutoSubmitMaster"):GetChild("EventOverlay"):visible(true)
-		overlay:queuecommand("DirectInputToEventOverlayHandler")
-	end
-
-	if ThemePrefs.Get("AutoDownloadUnlocks") then
-		-- This will only download if the expected data exists.
-		AttemptDownloads(res)
-	end
+	RetryQueued(master, succeeded)
 end
 
 local af = Def.ActorFrame {
 	Name="AutoSubmitMaster",
-	OnCommand=function(self)
-		-- local overlay = SCREENMAN:GetTopScreen():GetChild("Overlay"):GetChild("ScreenEval Common")
-		-- overlay:GetChild("AutoSubmitMaster"):GetChild("EventOverlay"):visible(true)
-		-- overlay:queuecommand("DirectInputToEventOverlayHandler")
-
-		-- local eventAf = overlay:GetChild("AutoSubmitMaster"):GetChild("EventOverlay"):GetChild("P1EventAf")
-		-- eventAf:playcommand("Show", {data={
-		-- 	["rpg"] = {
-		-- 		["name"] = "SRPG10",
-		-- 		["result"] = "score-added",
-		-- 		["rpgLeaderboard"] = {
-		-- 			{
-		-- 				["rank"] = 1,
-		-- 				["name"] = "Player1",
-		-- 				["score"] = 9900,
-		-- 				["date"] ="2024-05-05 1:20:30",
-		-- 				["isRival"] = false,
-		-- 				["isSelf"] = false,
-		-- 			},
-		-- 			{
-		-- 				["rank"] = 2,
-		-- 				["name"] = "Player2",
-		-- 				["score"] = 9800,
-		-- 				["date"] ="2024-05-05 1:20:30",
-		-- 				["isRival"] = true,
-		-- 				["isSelf"] = false,
-		-- 			},
-		-- 			{
-		-- 				["rank"] = 3,
-		-- 				["name"] = "Player3",
-		-- 				["score"] = 9700,
-		-- 				["date"] ="2024-05-05 1:20:30",
-		-- 				["isRival"] = false,
-		-- 				["isSelf"] = true,
-		-- 			}
-		-- 		}
-		-- 	}
-		-- }})
-	end,
 	RequestResponseActor(17, 50)..{
 		OnCommand=function(self)
-			local sendRequest = false
 			local headers = {}
 			local query = {
 				maxLeaderboardResults=NumEntries,
 			}
 			local body = {}
+			-- side -> { player, chartHash, submission }, kept for queueing on failure
+			local submissions = {}
+			-- banner hash -> local file, and side -> API key, for uploading missing banners
+			local bannerPaths, apiKeys = {}, {}
 
-			local rate = tonumber(string.format("%.0f", SL.Global.ActiveModifiers.MusicRate * 100))
+			local song = GAMESTATE:GetCurrentSong()
+			local packInfo, packBannerPath = GetPackInfoForECFACloud(song)
+			local songInfo, songBannerPath = GetSongInfoForECFACloud(song)
+			if packInfo and packInfo.bannerHash then bannerPaths[packInfo.bannerHash] = packBannerPath end
+			if songInfo and songInfo.bannerHash then bannerPaths[songInfo.bannerHash] = songBannerPath end
+
 			for i=1,2 do
 				local player = "PlayerNumber_P"..i
 				local pn = ToEnumShortString(player)
+				local chartHash, submission = BuildSubmission(player, packInfo, songInfo)
 
-				if GAMESTATE:IsHumanPlayer(player) and GAMESTATE:IsSideJoined(player) then
-					local _, valid, _ = ValidForGrooveStats(player)
-					local stats = STATSMAN:GetCurStageStats():GetPlayerStageStats(player)
-					local submitForPlayer = false
-
-					if valid and not stats:GetFailed() and SL[pn].IsPadPlayer then
-						local percentDP = stats:GetPercentDancePoints()
-						local score = tonumber(("%.0f"):format(percentDP * 10000))
-
-						local profileName = ""
-						if PROFILEMAN:IsPersistentProfile(player) and PROFILEMAN:GetProfile(player) then
-							profileName = PROFILEMAN:GetProfile(player):GetDisplayName()
-						end
-
-						if SL[pn].ApiKey ~= "" and SL[pn].Streams.Hash ~= "" then
-							query["chartHashP"..i] = SL[pn].Streams.Hash
-							headers["x-api-key-player-"..i] = SL[pn].ApiKey
-
-							body["player"..i] = {
-								rate=rate,
-								score=score,
-								judgmentCounts=GetJudgmentCounts(player),
-								rescoreCounts=GetRescoredJudgmentCounts(player),
-								usedCmod=(GAMESTATE:GetPlayerState(pn):GetPlayerOptions("ModsLevel_Preferred"):CMod() ~= nil),
-								comment=CreateCommentString(player),
-								playerOptions=GetPlayerOptionsJsonForGrooveStats(player),
-							}
-							sendRequest = true
-							submitForPlayer = true
-						end
-					end
-
-					if not submitForPlayer then
-						-- Hide the submit text if we're not submitting a score for a player.
-						-- For example in versus, if one player fails and the other passes, we
-						-- want to show that the first player score won't be submitted.
-						local submitText = self:GetParent():GetChild("P"..i.."SubmitText")
-						submitText:visible(false)
-					end
+				if chartHash then
+					query["chartHashP"..i] = chartHash
+					headers["x-api-key-player-"..i] = SL[pn].ApiKey
+					apiKeys[i] = SL[pn].ApiKey
+					body["player"..i] = submission
+					submissions[i] = { player=player, chartHash=chartHash, submission=submission }
+				elseif GAMESTATE:IsSideJoined(player) then
+					-- Hide the submit text if we're not submitting a score for a player.
+					-- For example in versus, if one player fails and the other passes, we
+					-- want to show that the first player score won't be submitted.
+					self:GetParent():GetChild("P"..i.."SubmitText"):visible(false)
 				end
 			end
-			-- Only send the request if it's applicable.
-			if sendRequest then
-				-- Unjoined players won't have the text displayed.
 
-				self:GetParent():GetChild("P1SubmitText"):settext(THEME:GetString("GrooveStats", "Submitting"))
-				self:GetParent():GetChild("P2SubmitText"):settext(THEME:GetString("GrooveStats", "Submitting"))
+			if next(submissions) == nil then return end
 
-				self.pendingGrooveStatsRequest = {
-					endpoint="?action=scoreSubmit&"..NETWORK:EncodeQueryParameters(query),
-					method="POST",
-					headers=headers,
-					body=JsonEncode(body),
-					timeout=30,
-					callback=AutoSubmitRequestProcessor,
-					args=SCREENMAN:GetTopScreen():GetChild("Overlay"):GetChild("ScreenEval Common"),
-				}
-				-- The engine appears to only actually dispatch one HTTP request at a time,
-				-- so whichever request we hand off first monopolizes that slot. GrooveStats
-				-- can take 10+ seconds to respond; ArrowCloud is normally near-instant. Give
-				-- ArrowCloud's ModuleCommand-triggered request (fired separately, slightly
-				-- later in screen-entry than this OnCommand) a head start so it isn't stuck
-				-- waiting behind a slow GrooveStats request that hasn't even been asked for yet.
-				self:sleep(0.5):queuecommand("SendGrooveStatsRequest")
+			if not online then
+				-- ECFA Cloud is enabled but wasn't reachable at the title screen.
+				QueueForLater(self:GetParent(), submissions)
+				return
 			end
-		end,
-		SendGrooveStatsRequestCommand=function(self)
-			if self.pendingGrooveStatsRequest then
-				self:playcommand("MakeGrooveStatsRequest", self.pendingGrooveStatsRequest)
-				self.pendingGrooveStatsRequest = nil
-			end
+
+			-- Unjoined players won't have the text displayed.
+			self:GetParent():GetChild("P1SubmitText"):settext(THEME:GetString("ECFACloud", "Submitting"))
+			self:GetParent():GetChild("P2SubmitText"):settext(THEME:GetString("ECFACloud", "Submitting"))
+
+			self:playcommand("MakeECFACloudRequest", {
+				endpoint="score-submit?"..NETWORK:EncodeQueryParameters(query),
+				method="POST",
+				headers=headers,
+				body=JsonEncode(body),
+				timeout=30,
+				callback=AutoSubmitRequestProcessor,
+				args={
+					overlay=SCREENMAN:GetTopScreen():GetChild("Overlay"):GetChild("ScreenEval Common"),
+					submissions=submissions,
+					bannerPaths=bannerPaths,
+					apiKeys=apiKeys,
+				},
+			})
 		end
 	}
 }
@@ -592,174 +434,86 @@ if ThemePrefs.Get("RainbowMode") then
 	textColor = Color.Black
 end
 
-af[#af+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal").. {
-	Name="P1SubmitText",
-	Text="",
-	InitCommand=function(self)
-		self:xy(_screen.w * 0.25, _screen.h - 15)
-		self:diffuse(textColor)
-		self:shadowlength(shadowLength)
-		self:zoom(0.8)
-		self:visible(GAMESTATE:IsSideJoined(PLAYER_1))
-	end,
-	SubmitCommand=function(self)
-		self:settext(THEME:GetString("GrooveStats", "Submitted"))
-	end,
-	SubmitFailedCommand=function(self)
-		self:settext(THEME:GetString("GrooveStats", "SubmitFailed"))
-		DiffuseEmojis(self)
-		
-		if PROFILEMAN:IsPersistentProfile(PLAYER_1) then
-			local p2pane = SCREENMAN:GetTopScreen():GetChild("Overlay"):GetChild("ScreenEval Common"):GetChild("Panes")
-			if PROFILEMAN:IsPersistentProfile(PLAYER_2) then
-				p2pane:GetChild("Pane" .. SL["P2"].EvalPanePrimary .. "_SideP2"):visible(false):diffusealpha(0):sleep(0.2):visible(true):diffusealpha(1)
+for i=1,2 do
+	local player = (i == 1) and PLAYER_1 or PLAYER_2
+
+	af[#af+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal").. {
+		Name="P"..i.."SubmitText",
+		Text="",
+		InitCommand=function(self)
+			self:xy(_screen.w * (i == 1 and 0.25 or 0.75), _screen.h - 15)
+			self:diffuse(textColor)
+			self:shadowlength(shadowLength)
+			self:zoom(0.8)
+			self:visible(GAMESTATE:IsSideJoined(player))
+		end,
+		SubmitCommand=function(self)
+			self:settext(THEME:GetString("ECFACloud", "Submitted"))
+		end,
+		SubmitFailedCommand=function(self)
+			self:settext(THEME:GetString("ECFACloud", "SubmitFailed"))
+			DiffuseEmojis(self)
+		end,
+		TimedOutCommand=function(self)
+			self:settext(THEME:GetString("ECFACloud", "TimedOut"))
+		end,
+		QueuedCommand=function(self, params)
+			self:settext(THEME:GetString("ECFACloud", "SavedForLater"):format(params.count))
+		end,
+		QueueFullCommand=function(self)
+			self:settext(THEME:GetString("ECFACloud", "QueueFull"))
+		end,
+	}
+
+	-- Plays still waiting in the offline queue, shown after a retry.
+	af[#af+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal").. {
+		Name="P"..i.."PendingText",
+		Text="",
+		InitCommand=function(self)
+			self:xy(_screen.w * (i == 1 and 0.25 or 0.75), _screen.h - 48)
+			self:diffuse(color("#ffcc33")):shadowlength(1):zoom(0.6):visible(false)
+		end,
+		UpdateCommand=function(self, params)
+			if params.count > 0 then
+				self:settext(THEME:GetString("ECFACloud", "PendingCount"):format(params.count)):visible(true)
 			else
-				p2pane:GetChild("Pane" .. SL["P2"].EvalPaneSecondary .. "_SideP2"):visible(false):diffusealpha(0):sleep(0.2):visible(true):diffusealpha(1)
+				self:visible(false)
 			end
-			p2pane:GetChild("Pane7_SideP2"):visible(true):sleep(0.2):diffusealpha(0)
-			self:sleep(0.1):queuecommand("SS")
-		end
-	end,
-	TimedOutCommand=function(self)
-		self:settext(THEME:GetString("GrooveStats", "TimedOut"))
-		
-		if PROFILEMAN:IsPersistentProfile(PLAYER_1) then
-			local p2pane = SCREENMAN:GetTopScreen():GetChild("Overlay"):GetChild("ScreenEval Common"):GetChild("Panes")
-			if PROFILEMAN:IsPersistentProfile(PLAYER_2) then
-				p2pane:GetChild("Pane" .. SL["P2"].EvalPanePrimary .. "_SideP2"):visible(false):diffusealpha(0):sleep(0.2):visible(true):diffusealpha(1)
-			else
-				p2pane:GetChild("Pane" .. SL["P2"].EvalPaneSecondary .. "_SideP2"):visible(false):diffusealpha(0):sleep(0.2):visible(true):diffusealpha(1)
-			end
-			p2pane:GetChild("Pane7_SideP2"):visible(true):sleep(0.2):diffusealpha(0)
-			self:sleep(0.1):queuecommand("SS")
-		end
-	end,
-	SSCommand=function(self)
-		ScreenshotQR("P1")
-	end
-}
+		end,
+	}
 
-af[#af+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal").. {
-	Name="P2SubmitText",
-	Text="",
-	InitCommand=function(self)
-		self:xy(_screen.w * 0.75, _screen.h - 15)
-		self:diffuse(textColor)
-		self:shadowlength(shadowLength)
-		self:zoom(0.8)
-		self:visible(GAMESTATE:IsSideJoined(PLAYER_2))
-	end,
-	SubmitCommand=function(self)
-		self:settext(THEME:GetString("GrooveStats", "Submitted"))
-	end,
-	SubmitFailedCommand=function(self)
-		self:settext(THEME:GetString("GrooveStats", "SubmitFailed"))
-		DiffuseEmojis(self)
-		
-		if PROFILEMAN:IsPersistentProfile(PLAYER_2) then
-			local p1pane = SCREENMAN:GetTopScreen():GetChild("Overlay"):GetChild("ScreenEval Common"):GetChild("Panes")
-			if PROFILEMAN:IsPersistentProfile(PLAYER_1) then
-				p1pane:GetChild("Pane" .. SL["P1"].EvalPanePrimary .. "_SideP1"):visible(false):diffusealpha(0):sleep(0.2):visible(true):diffusealpha(1)
-			else
-				p1pane:GetChild("Pane" .. SL["P1"].EvalPaneSecondary .. "_SideP1"):visible(false):diffusealpha(0):sleep(0.2):visible(true):diffusealpha(1)
-			end
-			p1pane:GetChild("Pane7_SideP1"):visible(true):sleep(0.2):diffusealpha(0)
-			self:sleep(0.1):queuecommand("SS")
-		end
-	end,
-	TimedOutCommand=function(self)
-		self:settext(THEME:GetString("GrooveStats", "TimedOut"))
-		
-		if PROFILEMAN:IsPersistentProfile(PLAYER_2) then
-			local p2pane = SCREENMAN:GetTopScreen():GetChild("Overlay"):GetChild("ScreenEval Common"):GetChild("Panes")
-			if PROFILEMAN:IsPersistentProfile(PLAYER_1) then
-				p2pane:GetChild("Pane" .. SL["P2"].EvalPanePrimary .. "_SideP2"):visible(false):diffusealpha(0):sleep(0.2):visible(true):diffusealpha(1)
-			else
-				p2pane:GetChild("Pane" .. SL["P2"].EvalPaneSecondary .. "_SideP2"):visible(false):diffusealpha(0):sleep(0.2):visible(true):diffusealpha(1)
-			end
-			p2pane:GetChild("Pane7_SideP2"):visible(true):sleep(0.2):diffusealpha(0)
-			self:sleep(0.1):queuecommand("SS")
-		end
-	end,
-	SSCommand=function(self)
-		ScreenshotQR("P2")
-	end
-}
+	-- e.g. "ECFA 2026 · +521 RP · #3 ▲2" (details are on Pane 9)
+	af[#af+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal").. {
+		Name="P"..i.."EventText",
+		Text="",
+		InitCommand=function(self)
+			self:xy(_screen.w * (i == 1 and 0.25 or 0.75), _screen.h - 32)
+			self:diffuse(Color.Yellow)
+			self:shadowlength(1)
+			self:zoom(0.7)
+			self:maxwidth(_screen.w * 0.45 / 0.7)
+			self:visible(false)
+		end,
+	}
 
-af[#af+1] = Def.Sprite{
-	Texture=THEME:GetPathG("","GrooveStats.png"),
-	Name="P1GrooveStats_Logo",
-	InitCommand=function(self)
-		self:zoom(0.2)
-		self:visible(false)
-	end,
-}
+	af[#af+1] = Def.Sprite{
+		Texture=THEME:GetPathG("","ECFACloud.png"),
+		Name="P"..i.."ECFACloud_Logo",
+		InitCommand=function(self)
+			self:zoom(0.2)
+			self:visible(false)
+		end,
+	}
 
-af[#af+1] = Def.Sprite{
-	Texture=THEME:GetPathG("","BoogieStats.png"),
-	Name="P1BoogieStats_Logo",
-	InitCommand=function(self)
-		self:zoom(0.2)
-		self:visible(false)
-	end,
-}
-
-af[#af+1] = Def.Sprite{
-	Texture=THEME:GetPathG("","BoogieStatsEX.png"),
-	Name="P1BoogieStatsEX_Logo",
-	InitCommand=function(self)
-		self:zoom(0.2)
-		self:visible(false)
-	end,
-}
-
-af[#af+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Bold")..{
-	Name="P1RecordText",
-	InitCommand=function(self)
-		local x = _screen.cx - 225
-		self:zoom(0.225)
-		self:xy(x,40)
-		self:visible(false)
-	end,
-}
-
-af[#af+1] = Def.Sprite{
-	Texture=THEME:GetPathG("","GrooveStats.png"),
-	Name="P2GrooveStats_Logo",
-	InitCommand=function(self)
-		self:zoom(0.2)
-		self:visible(false)
-	end,
-}
-
-af[#af+1] = Def.Sprite{
-	Texture=THEME:GetPathG("","BoogieStats.png"),
-	Name="P2BoogieStats_Logo",
-	InitCommand=function(self)
-		self:zoom(0.2)
-		self:visible(false)
-	end,
-}
-
-af[#af+1] = Def.Sprite{
-	Texture=THEME:GetPathG("","BoogieStatsEX.png"),
-	Name="P2BoogieStatsEX_Logo",
-	InitCommand=function(self)
-		self:zoom(0.2)
-		self:visible(false)
-	end,
-}
-
-af[#af+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Bold")..{
-	Name="P2RecordText",
-	InitCommand=function(self)
-		local x = _screen.cx + 225
-		self:zoom(0.225)
-		self:xy(x,40)
-		self:visible(false)
-	end,
-}
-
-af[#af+1] = LoadActor("./EventOverlay.lua")
+	af[#af+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Bold")..{
+		Name="P"..i.."RecordText",
+		InitCommand=function(self)
+			local x = _screen.cx + 225 * (i == 1 and -1 or 1)
+			self:zoom(0.225)
+			self:xy(x,40)
+			self:visible(false)
+		end,
+	}
+end
 
 return af

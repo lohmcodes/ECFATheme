@@ -76,7 +76,7 @@ if EarnedMachineRecord or EarnedPersonalRecord then
 	SL[pn].HighScores.EnteringName = true
 end
 
--- We always want to return this actor frame in case we need to "hijack" it for GrooveStats functionality.
+-- We always want to return this actor frame in case we need to "hijack" it for ECFA Cloud functionality.
 local t = Def.ActorFrame{
 	Name="RecordTexts",
 	InitCommand=function(self) self:zoom(0.225) end,

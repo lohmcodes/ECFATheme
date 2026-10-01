@@ -135,10 +135,10 @@ af[#af+1] = Def.ActorFrame{
 			self:playcommand("Show")
 		end
 
-		-- Computing the GrooveStats hash requires parsing the simfile, which is
+		-- Computing the chart hash requires parsing the simfile, which is
 		-- expensive. Debounce it so that scrolling through the wheel doesn't
 		-- parse every chart we pass over, only the one we settle on.
-		-- Only needed for GrooveStats score/leaderboard lookups.
+		-- Only needed for ECFA Cloud score/leaderboard lookups.
 		self:stoptweening()
 		self:sleep(0.4)
 		self:queuecommand("ComputeHash")

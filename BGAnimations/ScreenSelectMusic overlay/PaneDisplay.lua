@@ -74,8 +74,8 @@ local GetScoresRequestProcessor = function(res, params)
 	local data = res.statusCode == 200 and JsonDecode(res.body) or nil
 	local requestCacheKey = params.requestCacheKey
 	-- If we have data, and the requestCacheKey is not in the cache, cache it.
-	if data ~= nil and SL.GrooveStats.RequestCache[requestCacheKey] == nil then
-		SL.GrooveStats.RequestCache[requestCacheKey] = {
+	if data ~= nil and SL.ECFACloud.RequestCache[requestCacheKey] == nil then
+		SL.ECFACloud.RequestCache[requestCacheKey] = {
 			Response=res,
 			Timestamp=GetTimeSinceStart()
 		}
@@ -103,8 +103,8 @@ local GetScoresRequestProcessor = function(res, params)
 			local leaderboardData = nil
 			if showExScore then
 				leaderboardData = data[playerStr]["exLeaderboard"]
-			elseif data[playerStr]["gsLeaderboard"] then
-				leaderboardData = data[playerStr]["gsLeaderboard"]
+			elseif data[playerStr]["itgLeaderboard"] then
+				leaderboardData = data[playerStr]["itgLeaderboard"]
 			end
 
 			if leaderboardData then
@@ -139,10 +139,10 @@ local GetScoresRequestProcessor = function(res, params)
 							)
 							personalRecordSet = true
 						else
-							-- Let's check if the GS high score is higher than the local high score
+							-- Let's check if the ECFA Cloud high score is higher than the local high score
 							local player = PlayerNumber[i]
 							local localScore = GetScoreForPlayer(player)
-							-- GS's score entry is a value like 9823, so we need to divide it by 100 to get 98.23
+							-- ECFA Cloud's score entry is a value like 9823, so we need to divide it by 100 to get 98.23
 							local gsScore = gsEntry["score"] / 100
 
 							-- GetPercentDP() returns a value like 0.9823, so we need to multiply it by 100 to get 98.23
@@ -169,37 +169,6 @@ local GetScoresRequestProcessor = function(res, params)
 							rivalName,
 							rivalScore,
 							"#000000"
-						)
-						rivalNum = rivalNum + 1
-					end
-				end
-			end
-		elseif data and data[playerStr] and data[playerStr]["itl"] and data[playerStr]["itl"]["itlLeaderboard"] then
-			
-			-- And then also ensure that the chart hash matches the currently parsed one.
-			-- It's better to just not display anything than display the wrong scores.
-			if SL["P"..i].Streams.Hash == data[playerStr]["chartHash"] then
-				for gsEntry in ivalues(data[playerStr]["itl"]["itlLeaderboard"]) do
-					if gsEntry["rank"] == 1 then
-						SetNameAndScore(
-							GetMachineTag(gsEntry),
-							string.format("%.2f%%", gsEntry["score"]/100),
-							machineName,
-							machineScore,
-							"#21CCE8"
-						)
-						worldRecordSet = true
-					end
-
-					if gsEntry["isRival"] then
-						local rivalScore = paneDisplay:GetChild("Rival"..rivalNum.."Score")
-						local rivalName = paneDisplay:GetChild("Rival"..rivalNum.."Name")
-						SetNameAndScore(
-							GetMachineTag(gsEntry),
-							string.format("%.2f%%", gsEntry["score"]/100),
-							rivalName,
-							rivalScore,
-							"#21CCE8"
 						)
 						rivalNum = rivalNum + 1
 					end
@@ -239,34 +208,17 @@ local GetScoresRequestProcessor = function(res, params)
 			end
 		else
 			if data and data[playerStr] then
-				local headers = res.headers
-				local boogie = false
-				local boogie_ex = false
-				if headers["bs-leaderboard-player-" .. i] == "BS" then
-					boogie = true
-				elseif headers["bs-leaderboard-player-" .. i] == "BS-EX" then
-					boogie_ex = true
-				end
-				
 				if foundLeaderboard then
-					if boogie then
-						loadingText:settext("BoogieStats")
-					elseif boogie_ex then
-						loadingText:settext("Boogie EX")
-					elseif SL["P"..i].ActiveModifiers.ShowExScore then
-						loadingText:settext(THEME:GetString("GrooveStats", "ExScore"))
+					if SL["P"..i].ActiveModifiers.ShowExScore then
+						loadingText:settext(THEME:GetString("ECFACloud", "ExScore"))
 					else
-						loadingText:settext(THEME:GetString("GrooveStats", "GrooveStats"))
+						loadingText:settext(THEME:GetString("ECFACloud", "ECFACloud"))
 					end
 				else
-					if boogie then
-						loadingText:settext("No Boogie Data")
-					elseif boogie_ex then
-						loadingText:settext("No Boogie EX")
-					elseif SL["P"..i].ActiveModifiers.ShowExScore then
-						loadingText:settext(THEME:GetString("GrooveStats", "NoEXData"))
+					if SL["P"..i].ActiveModifiers.ShowExScore then
+						loadingText:settext(THEME:GetString("ECFACloud", "NoExData"))
 					else
-						loadingText:settext(THEME:GetString("GrooveStats", "NoData"))
+						loadingText:settext(THEME:GetString("ECFACloud", "NoData"))
 					end
 				end
 			else
@@ -313,13 +265,13 @@ af[#af+1] = RequestResponseActor(17, 50)..{
 	ChartParsedMessageCommand=function(self)
 		local master = self:GetParent()
 
-		if not IsServiceAllowed(SL.GrooveStats.GetScores) then
-			if SL.GrooveStats.IsConnected then
+		if not IsServiceAllowed(SL.ECFACloud.GetScores) then
+			if SL.ECFACloud.IsConnected then
 				-- loadingText is made visible when requests complete.
 				-- If we disable the service from a previous request, surface it to the user here.
 				for i=1,2 do
 					local loadingText = master:GetChild("PaneDisplayP"..i):GetChild("Loading")
-					loadingText:settext(THEME:GetString("GrooveStats", "Disabled"))
+					loadingText:settext(THEME:GetString("ECFACloud", "Disabled"))
 					loadingText:visible(true)
 				end
 			end
@@ -346,7 +298,7 @@ af[#af+1] = RequestResponseActor(17, 50)..{
 					requestCacheKey = requestCacheKey .. SL[pn].Streams.Hash .. SL[pn].ApiKey .. pn
 					local loadingText = master:GetChild("PaneDisplayP"..i):GetChild("Loading")
 					loadingText:visible(true)
-					loadingText:settext(THEME:GetString("GrooveStats", "Loading")):diffuse(Color.Black)
+					loadingText:settext(THEME:GetString("ECFACloud", "Loading")):diffuse(Color.Black)
 					sendRequest = true
 				end
 			end
@@ -354,26 +306,17 @@ af[#af+1] = RequestResponseActor(17, 50)..{
 
 		-- Only send the request if it's applicable.
 		if sendRequest then
-			-- ArrowCloud minimal logging: invoke for each player hash we are about to request
-			if SL and SL.ArrowCloud and SL.ArrowCloud.Enabled then
-				for i=1,2 do
-					local pn = "P"..i
-					if SL[pn] and SL[pn].Streams and SL[pn].Streams.Hash and #SL[pn].Streams.Hash>0 then
-						ArrowCloudRequest(SL[pn].Streams.Hash)
-					end
-				end
-			end
 			requestCacheKey = CRYPTMAN:SHA256String(requestCacheKey.."-player-scores")
 			local params = {requestCacheKey=requestCacheKey, master=master}
 			RemoveStaleCachedRequests()
 			-- If the data is still in the cache, run the request processor directly
 			-- without making a request with the cached response.
-			if SL.GrooveStats.RequestCache[requestCacheKey] ~= nil then
-				local res = SL.GrooveStats.RequestCache[requestCacheKey].Response
+			if SL.ECFACloud.RequestCache[requestCacheKey] ~= nil then
+				local res = SL.ECFACloud.RequestCache[requestCacheKey].Response
 				GetScoresRequestProcessor(res, params)
 			else
-				self:playcommand("MakeGrooveStatsRequest", {
-					endpoint="?action=playerScores&"..NETWORK:EncodeQueryParameters(query),
+				self:playcommand("MakeECFACloudRequest", {
+					endpoint="player-scores?"..NETWORK:EncodeQueryParameters(query),
 					method="GET",
 					headers=headers,
 					timeout=10,
@@ -520,9 +463,9 @@ for player in ivalues(PlayerNumber) do
 			self:y(pos.row[1])
 		end,
 		SetCommand=function(self)
-			-- We overload this actor to work both for GrooveStats and also offline.
+			-- We overload this actor to work both for ECFA Cloud and also offline.
 			-- If we're connected, we let the ResponseProcessor set the text
-			if IsServiceAllowed(SL.GrooveStats.GetScores) and ThemePrefs.Get("MusicWheelGS") == "Pane" then
+			if IsServiceAllowed(SL.ECFACloud.GetScores) and ThemePrefs.Get("MusicWheelGS") == "Pane" then
 				self:settext("----"):diffuse(Color.Black)
 			else
 				self:queuecommand("SetDefault")
@@ -545,9 +488,9 @@ for player in ivalues(PlayerNumber) do
 			self:y(pos.row[1])
 		end,
 		SetCommand=function(self)
-			-- We overload this actor to work both for GrooveStats and also offline.
+			-- We overload this actor to work both for ECFA Cloud and also offline.
 			-- If we're connected, we let the ResponseProcessor set the text
-			if IsServiceAllowed(SL.GrooveStats.GetScores) and ThemePrefs.Get("MusicWheelGS") == "Pane" then
+			if IsServiceAllowed(SL.ECFACloud.GetScores) and ThemePrefs.Get("MusicWheelGS") == "Pane" then
 				self:settext("??.??%"):diffuse(Color.Black)
 			else
 				self:queuecommand("SetDefault")
@@ -564,7 +507,7 @@ for player in ivalues(PlayerNumber) do
 		end
 	}
 
-	-- Player Profile/GrooveStats Machine Tag
+	-- Player Profile/ECFA Cloud Machine Tag
 	af2[#af2+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{
 		Name="PlayerHighScoreName",
 		InitCommand=function(self)
@@ -573,9 +516,9 @@ for player in ivalues(PlayerNumber) do
 			self:y(pos.row[2])
 		end,
 		SetCommand=function(self)
-			-- We overload this actor to work both for GrooveStats and also offline.
+			-- We overload this actor to work both for ECFA Cloud and also offline.
 			-- If we're connected, we let the ResponseProcessor set the text
-			if IsServiceAllowed(SL.GrooveStats.GetScores) and ThemePrefs.Get("MusicWheelGS") == "Pane" then
+			if IsServiceAllowed(SL.ECFACloud.GetScores) and ThemePrefs.Get("MusicWheelGS") == "Pane" then
 				self:settext("----")
 			else
 				self:queuecommand("SetDefault")
@@ -588,7 +531,7 @@ for player in ivalues(PlayerNumber) do
 		end
 	}
 
-	-- Player Profile/GrooveStats HighScore
+	-- Player Profile/ECFA Cloud HighScore
 	af2[#af2+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{
 		Name="PlayerHighScore",
 		InitCommand=function(self)
@@ -597,9 +540,9 @@ for player in ivalues(PlayerNumber) do
 			self:y(pos.row[2])
 		end,
 		SetCommand=function(self)
-			-- We overload this actor to work both for GrooveStats and also offline.
+			-- We overload this actor to work both for ECFA Cloud and also offline.
 			-- If we're connected, we let the ResponseProcessor set the text
-			if IsServiceAllowed(SL.GrooveStats.GetScores) and ThemePrefs.Get("MusicWheelGS") == "Pane" then
+			if IsServiceAllowed(SL.ECFACloud.GetScores) and ThemePrefs.Get("MusicWheelGS") == "Pane" then
 				self:settext("??.??%")
 			else
 				self:queuecommand("SetDefault")
@@ -617,7 +560,7 @@ for player in ivalues(PlayerNumber) do
 
 	af2[#af2+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{
 		Name="Loading",
-		Text=THEME:GetString("GrooveStats", "Loading"),
+		Text=THEME:GetString("ECFACloud", "Loading"),
 		InitCommand=function(self)
 			self:zoom(text_zoom):diffuse(Color.Black)
 			self:x(pos.col[3]-15)
@@ -625,7 +568,7 @@ for player in ivalues(PlayerNumber) do
 			self:visible(false)
 		end,
 		SetCommand=function(self)
-			self:settext(THEME:GetString("GrooveStats", "Loading"))
+			self:settext(THEME:GetString("ECFACloud", "Loading"))
 			self:visible(false)
 		end
 	}
@@ -641,7 +584,7 @@ for player in ivalues(PlayerNumber) do
 		end,
 		SetCommand=function(self)
 			-- Hide the difficulty number if we're connected.
-			if IsServiceAllowed(SL.GrooveStats.GetScores) then
+			if IsServiceAllowed(SL.ECFACloud.GetScores) then
 				self:visible(false)
 			end
 
@@ -666,7 +609,7 @@ for player in ivalues(PlayerNumber) do
 					self:y(pos.row[i])
 				end,
 				OnCommand=function(self)
-					self:visible(IsServiceAllowed(SL.GrooveStats.GetScores))
+					self:visible(IsServiceAllowed(SL.ECFACloud.GetScores))
 				end,
 				SetCommand=function(self)
 					self:settext("----"):diffuse(Color.Black)
@@ -682,7 +625,7 @@ for player in ivalues(PlayerNumber) do
 					self:y(pos.row[i])
 				end,
 				OnCommand=function(self)
-					self:visible(IsServiceAllowed(SL.GrooveStats.GetScores))
+					self:visible(IsServiceAllowed(SL.ECFACloud.GetScores))
 				end,
 				SetCommand=function(self)
 					self:settext("??.??%"):diffuse(Color.Black)

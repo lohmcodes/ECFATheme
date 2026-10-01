@@ -25,8 +25,8 @@ local function CreditsText( player )
 			-- this feels like a holdover from SM3.9 that just never got updated
 			local str = ScreenSystemLayerHelpers.GetCreditsMessage(player)
 			local pn = ToEnumShortString(player)
-			if SL[pn].GrooveStatsUsername ~= "" then
-				str = SL[pn].GrooveStatsUsername
+			if SL[pn].ECFACloudUsername ~= "" then
+				str = SL[pn].ECFACloudUsername
 			end
 
 			self:settext(str)
@@ -312,33 +312,34 @@ end
 LoadModules()
 
 -- -----------------------------------------------------------------------
--- The GrooveStats service info pane.
+-- The ECFA Cloud service info pane.
 -- We put this in ScreenSystemLayer because if people move through the menus too fast,
 -- it's possible that the available services won't be updated before one starts the set.
 -- This allows us to set available services "in the background" as we're moving
 -- through the menus.
 
-local NewSessionRequestProcessor = function(res, gsInfo)
-	if gsInfo == nil then return end
-	
-	local groovestats = gsInfo:GetChild("GrooveStats")
-	local service1 = gsInfo:GetChild("Service1")
-	local service2 = gsInfo:GetChild("Service2")
-	local service3 = gsInfo:GetChild("Service3")
+local NewSessionRequestProcessor = function(res, serviceInfo)
+	if serviceInfo == nil then return end
+
+	local ecfacloud = serviceInfo:GetChild("ECFACloud")
+	local service1 = serviceInfo:GetChild("Service1")
+	local service2 = serviceInfo:GetChild("Service2")
+	local service3 = serviceInfo:GetChild("Service3")
 
 	service1:visible(false)
 	service2:visible(false)
 	service3:visible(false)
 
-	SL.GrooveStats.IsConnected = false
+	SL.ECFACloud.IsConnected = false
 	if res.error or res.statusCode ~= 200 then
 		local error = res.error and ToEnumShortString(res.error) or nil
 		if error == "Timeout" then
-			groovestats:settext("Timed Out")
+			ecfacloud:settext("Timed Out")
 		elseif error or (res.statusCode ~= nil and res.statusCode ~= 200) then
 			local text = ""
 			if error == "Blocked" then
-				text = "Access to GrooveStats Host Blocked"
+				-- ITGmania only talks to hosts listed in HttpAllowHosts.
+				text = "Host Blocked: add "..GetECFACloudHost().."\nto HttpAllowHosts in Preferences.ini"
 			elseif error == "CannotConnect" then
 				text = "Machine Offline"
 			elseif error == "Timeout" then
@@ -351,19 +352,22 @@ local NewSessionRequestProcessor = function(res, gsInfo)
 
 			-- These default to false, but may have changed throughout the game's lifetime.
 			-- It doesn't hurt to explicitly set them to false.
-			SL.GrooveStats.GetScores = false
-			SL.GrooveStats.Leaderboard = false
-			SL.GrooveStats.AutoSubmit = false
-			groovestats:settext("❌ GrooveStats")
+			SL.ECFACloud.GetScores = false
+			SL.ECFACloud.Leaderboard = false
+			SL.ECFACloud.AutoSubmit = false
+			SL.ECFACloud.Events = false
+			ecfacloud:settext("❌ ECFA Cloud")
 
 			DiffuseEmojis(service1:ClearAttributes())
 		end
-		DiffuseEmojis(groovestats:ClearAttributes())
+		DiffuseEmojis(ecfacloud:ClearAttributes())
 		return
 	end
 
 	local data = JsonDecode(res.body)
 	if data == nil then return end
+
+	SL.ECFACloud.Events = (data["features"] ~= nil and data["features"]["events"] == true)
 
 	local services = data["servicesAllowed"]
 	if services ~= nil then
@@ -371,64 +375,56 @@ local NewSessionRequestProcessor = function(res, gsInfo)
 
 		if services["playerScores"] ~= nil then
 			if services["playerScores"] then
-				SL.GrooveStats.GetScores = true
+				SL.ECFACloud.GetScores = true
 			else
 				local curServiceText = gsInfo:GetChild("Service"..serviceCount)
 				curServiceText:settext("❌ Get Scores"):visible(true)
 				serviceCount = serviceCount + 1
-				SL.GrooveStats.GetScores = false
+				SL.ECFACloud.GetScores = false
 			end
 		end
 
 		if services["playerLeaderboards"] ~= nil then
 			if services["playerLeaderboards"] then
-				SL.GrooveStats.Leaderboard = true
+				SL.ECFACloud.Leaderboard = true
 			else
 				local curServiceText = gsInfo:GetChild("Service"..serviceCount)
 				curServiceText:settext("❌ Leaderboard"):visible(true)
 				serviceCount = serviceCount + 1
-				SL.GrooveStats.Leaderboard = false
+				SL.ECFACloud.Leaderboard = false
 			end
 		end
 
 		if services["scoreSubmit"] ~= nil then
 			if services["scoreSubmit"] then
-				SL.GrooveStats.AutoSubmit = true
+				SL.ECFACloud.AutoSubmit = true
 			else
 				local curServiceText = gsInfo:GetChild("Service"..serviceCount)
 				curServiceText:settext("❌ Auto-Submit"):visible(true)
 				serviceCount = serviceCount + 1
-				SL.GrooveStats.AutoSubmit = false
+				SL.ECFACloud.AutoSubmit = false
 			end
 		end
 	end
 
 	-- All services are enabled, display a green check.
-	if SL.GrooveStats.GetScores and SL.GrooveStats.Leaderboard and SL.GrooveStats.AutoSubmit then
-		if ThemePrefs.Get("EnableBoogieStats") then
-			if string.find(PREFSMAN:GetPreference("HttpAllowHosts"), "boogiestats.andr.host") then
-				groovestats:settext("✔ BoogieStats")
-			else
-				groovestats:settext("✔ GrooveStats (BoogieStats host not in allow list)")
-			end
-		else
-			groovestats:settext("✔ GrooveStats")
-		end
-		SL.GrooveStats.IsConnected = true
+	if SL.ECFACloud.GetScores and SL.ECFACloud.Leaderboard and SL.ECFACloud.AutoSubmit then
+		ecfacloud:settext("✔ ECFA Cloud")
+		SL.ECFACloud.IsConnected = true
 	-- All services are disabled, display a red X.
-	elseif not SL.GrooveStats.GetScores and not SL.GrooveStats.Leaderboard and not SL.GrooveStats.AutoSubmit then
-		groovestats:settext("❌ GrooveStats")
+	elseif not SL.ECFACloud.GetScores and not SL.ECFACloud.Leaderboard and not SL.ECFACloud.AutoSubmit then
+		ecfacloud:settext("❌ ECFA Cloud")
 		-- We would've displayed the individual failed services, but if they're all down then hide the group.
 		service1:visible(false)
 		service2:visible(false)
 		service3:visible(false)
 	-- Some combination of the two, we display a caution symbol.
 	else
-		groovestats:settext("⚠ GrooveStats")
-		SL.GrooveStats.IsConnected = true
+		ecfacloud:settext("⚠ ECFA Cloud")
+		SL.ECFACloud.IsConnected = true
 	end
 
-	DiffuseEmojis(groovestats:ClearAttributes())
+	DiffuseEmojis(ecfacloud:ClearAttributes())
 	DiffuseEmojis(service1:ClearAttributes())
 	DiffuseEmojis(service2:ClearAttributes())
 	DiffuseEmojis(service3:ClearAttributes())
@@ -449,7 +445,7 @@ local function DiffuseText(bmt)
 end
 
 t[#t+1] = Def.ActorFrame{
-	Name="GrooveStatsInfo",
+	Name="ECFACloudInfo",
 	InitCommand=function(self)
 		-- Put the info in the top right corner.
 		self:zoom(0.8):x(10):y(15)
@@ -466,25 +462,17 @@ t[#t+1] = Def.ActorFrame{
 	end,
 
 	LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{
-		Name="GrooveStats",
-		Text="     GrooveStats",
+		Name="ECFACloud",
+		Text="     ECFA Cloud",
 		InitCommand=function(self)
-			self:visible(ThemePrefs.Get("EnableGrooveStats"))
+			self:visible(ThemePrefs.Get("EnableECFACloud"))
 			self:horizalign(left)
 			DiffuseText(self)
 		end,
 		VisualStyleSelectedMessageCommand=function(self) DiffuseText(self) end,
 		ResetCommand=function(self)
-			self:visible(ThemePrefs.Get("EnableGrooveStats"))
-			if ThemePrefs.Get("EnableBoogieStats") then
-				if string.find(PREFSMAN:GetPreference("HttpAllowHosts"), "boogiestats.andr.host") then
-					self:settext("     BoogieStats")
-				else
-					self:settext("     GrooveStats (BoogieStats host not in allow list)")
-				end
-			else
-				self:settext("     GrooveStats")
-			end
+			self:visible(ThemePrefs.Get("EnableECFACloud"))
+			self:settext("     ECFA Cloud")
 		end
 	},
 
@@ -523,14 +511,14 @@ t[#t+1] = Def.ActorFrame{
 
 	RequestResponseActor(5, 0)..{
 		SendRequestCommand=function(self)
-			if ThemePrefs.Get("EnableGrooveStats") then
+			if ThemePrefs.Get("EnableECFACloud") then
 				-- These default to false, but may have changed throughout the game's lifetime.
 				-- Reset these variable before making a request.
-				SL.GrooveStats.GetScores = false
-				SL.GrooveStats.Leaderboard = false
-				SL.GrooveStats.AutoSubmit = false
-				self:playcommand("MakeGrooveStatsRequest", {
-					endpoint="?action=newSession&chartHashVersion="..SL.GrooveStats.ChartHashVersion,
+				SL.ECFACloud.GetScores = false
+				SL.ECFACloud.Leaderboard = false
+				SL.ECFACloud.AutoSubmit = false
+				self:playcommand("MakeECFACloudRequest", {
+					endpoint="session?chartHashVersion="..SL.ECFACloud.ChartHashVersion,
 					method="GET",
 					timeout=10,
 					callback=NewSessionRequestProcessor,
@@ -540,17 +528,6 @@ t[#t+1] = Def.ActorFrame{
 		end
 	}
 }
-
--- -----------------------------------------------------------------------
--- Loads the UnlocksCache from disk for SRPG unlocks.
-LoadUnlocksCache()
-
--- -----------------------------------------------------------------------
--- Online Lobby Handler
--- We only want one global instance of this, so we create it once but
--- can get the same instance of the actor multiple times.
-
-t[#t+1] = CreateOnlineHandler()
 
 -- -----------------------------------------------------------------------
 -- SystemMessage stuff.

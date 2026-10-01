@@ -87,12 +87,9 @@ local af = Def.ActorFrame{
 	-- a Test Input overlay can (maybe) be accessed from the SortMenu
 	LoadActor("./TestInput.lua"),
 
-	-- The GrooveStats leaderboard that can (maybe) be accessed from the SortMenu
+	-- The ECFA Cloud leaderboard that can (maybe) be accessed from the SortMenu
 	-- This is only added in "dance" mode and if the service is available.
 	LoadActor("./Leaderboard.lua"),
-
-	-- The Arrow Cloud leaderboard (accessed from SortMenu)
-	LoadActor("./ACLeaderboard.lua"),
 
 	LoadActor("./SongSearch/default.lua"),
 }

@@ -116,8 +116,6 @@ local input = function(event)
 				elseif focus.new_overlay == "Leaderboard" then
 					-- The leaderboard entry is removed altogether if the service isn't available.
 					sortmenu:queuecommand("DirectInputToLeaderboard")
-				elseif focus.new_overlay == "ACLeaderboard" then
-					sortmenu:queuecommand("DirectInputToACLeaderboard")
 				elseif focus.new_overlay == "SongSearch" then
 					-- Direct the input back to the engine, so that the ScreenTextEntry overlay
 					-- works correctly.
@@ -128,15 +126,6 @@ local input = function(event)
 					overlay:GetChild("PaneDisplayMaster"):GetChild("GetScoresRequester"):playcommand("Cancel")
 					overlay:playcommand("DirectInputToEngine")
 					SCREENMAN:SetNewScreen("ScreenReloadSongsSSM")
-				elseif focus.new_overlay == "ViewDownloads" then
-					-- Make sure we cancel the request if it's active before trying to switch screens.
-					-- This prevents the "Stale ActorFrame" error.
-					overlay:GetChild("PaneDisplayMaster"):GetChild("GetScoresRequester"):playcommand("Cancel")
-					overlay:playcommand("DirectInputToEngine")
-					SCREENMAN:SetNewScreen("ScreenViewDownloads")
-				elseif focus.new_overlay == "OnlineLobbies" then
-					overlay:queuecommand("DirectInputToEngine")
-					SCREENMAN:SetNewScreen("ScreenOnlineLobbies")
 				elseif focus.new_overlay == "SwitchProfile" then
 					-- There's a race condition that occurs when a player mashes the Start button
 					-- fast enough, when the Switch Profiles button is highlighted, that causes

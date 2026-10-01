@@ -353,7 +353,7 @@ ParseChartInfo = function(steps, pn)
 	SL[pn].Streams.Brackets = techCounts:GetValue("TechCountsCategory_Brackets")
 end
 
--- Computing the GrooveStats hash requires decompressing the chart's NoteData, which is expensive.
+-- Computing the chart hash requires decompressing the chart's NoteData, which is expensive.
 ComputeChartHash = function(steps, pn)
 	if not steps then return end
 
@@ -384,7 +384,7 @@ ComputeChartHash = function(steps, pn)
 			-- Parse out just the contents of the notes
 			local chartString, BPMs = GetSimfileChartString(simfileString, stepsType, difficulty, description, fileType)
 			if chartString ~= nil and BPMs ~= nil then
-				-- We use 16 characters for the V3 GrooveStats hash.
+				-- We use 16 characters for the V3 chart hash (shared with GrooveStats, used by ECFA Cloud).
 				-- For couples charts the chart string contains both P1 and P2 steps
 				-- separated by an '&'; the hash intentionally covers the whole thing,
 				-- so it is identical for both players.

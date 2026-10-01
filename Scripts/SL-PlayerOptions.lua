@@ -575,7 +575,7 @@ local Overrides = {
 		SelectType = "SelectMultiple",
 		Values = function()
 			values = { "PackBanner", "StepInfo" }
-			if IsServiceAllowed(SL.GrooveStats.GetScores) then
+			if IsServiceAllowed(SL.ECFACloud.GetScores) then
 				table.insert(values, "DisplayScorebox")
 			end
 			return values

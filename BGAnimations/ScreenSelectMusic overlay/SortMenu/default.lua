@@ -11,7 +11,6 @@ local sortmenu_input    = LoadActor("SortMenu_InputHandler.lua", sort_wheel)
 -- input handlers for TestInput and Leaderboards are similarly complex
 local testinput_input   = LoadActor("TestInput_InputHandler.lua")
 local leaderboard_input = LoadActor("Leaderboard_InputHandler.lua")
-local acleaderboard_input = LoadActor("ACLeaderboard_InputHandler.lua")
 
 -- logic for song search is also in its own file
 local SongSearchSettings = LoadActor("../SongSearch/SongSearchSettings.lua")
@@ -168,7 +167,6 @@ local DirectInputToEngine = function(self)
 	screen:RemoveInputCallback(sortmenu_input)
 	screen:RemoveInputCallback(testinput_input)
 	screen:RemoveInputCallback(leaderboard_input)
-	screen:RemoveInputCallback(acleaderboard_input)
 
 	for player in ivalues(PlayerNumber) do
 		SCREENMAN:set_input_redirected(player, false)
@@ -176,7 +174,6 @@ local DirectInputToEngine = function(self)
 	self:playcommand("HideSortMenu")
 	overlay:playcommand("HideTestInput")
 	overlay:playcommand("HideLeaderboard")
-	overlay:playcommand("HideACLeaderboard")
 end
 
 ------------------------------------------------------------
@@ -193,27 +190,12 @@ local function AddFavorites()
 	return false
 end
 
--- Only display the View Downloads option if we're connected to
--- GrooveStats and Auto-Downloads are enabled.
-local function DownloadsExist()
-    return SL.GrooveStats.IsConnected and ThemePrefs.Get("AutoDownloadUnlocks")
-end
-
 local function PracticeModeAvailable()
-	-- Don't allow practice mode if we're using online lobbies
-	local onlineHandler = GetOnlineHandlerInstance()
-	if onlineHandler and onlineHandler.connected then
-		return false
-	end
-
 	return GAMESTATE:IsEventMode() and GAMESTATE:GetCurrentSong() ~= nil and ThemePrefs.Get("KeyboardFeatures")
 end
 
 local function ChangePlayModeAvailable()
-	local onlineHandler = GetOnlineHandlerInstance()
-	return GAMESTATE:IsEventMode() and
-		ThemePrefs.Get("AllowScreenSelectPlayMode2") and
-		not (onlineHandler and onlineHandler.connected)
+	return GAMESTATE:IsEventMode() and ThemePrefs.Get("AllowScreenSelectPlayMode2")
 end
 
 local function AddSorts()
@@ -413,8 +395,7 @@ local t = Def.ActorFrame {
 			-- Only show GoBack if we're in 3 key navigation mode, as it's redundant in 5 key.
 			{ { "", "GoBack" }, PREFSMAN:GetPreference("ThreeKeyNavigation") },
 			{ {"NextPlease", "SwitchProfile"}, ThemePrefs.Get("AllowScreenSelectProfile") },
-			{ {"GrooveStats", "Leaderboard"}, function() return GAMESTATE:GetCurrentSong() ~= nil end },
-			{ {"ArrowCloud", "ACLeaderboard"}, function() return GAMESTATE:GetCurrentSong() ~= nil end },
+			{ {"ECFACloud", "Leaderboard"}, function() return GAMESTATE:GetCurrentSong() ~= nil end },
 			{ {"WhereforeArtThou", "SongSearch"}, not GAMESTATE:IsCourseMode() and ThemePrefs.Get("KeyboardFeatures") },
 			{ {"ImLovinIt", "AddFavorite"}, function() return GAMESTATE:GetCurrentSong() ~= nil end},
 			{ {"MixTape", "Preferred"}, AddFavorites },
@@ -438,9 +419,7 @@ local t = Def.ActorFrame {
 					-- Loading songs doesn't work from course mode because it invalidates autogen courses,
 					-- which could delete the currently selected course.
 					{ {"TakeABreather", "LoadNewSongs"}, not GAMESTATE:IsCourseMode() },
-					{ {"NeedMoreRam", "ViewDownloads"}, DownloadsExist },
 					{ {"SetSummaryText", "SetSummary"}, SL.Global.Stages.PlayedThisGame > 0 },
-					{ {"BottomText", "OnlineLobbies"}, ThemePrefs.Get("EnableOnlineLobbies") and GAMESTATE:IsEventMode() and not GAMESTATE:IsCourseMode() },
 				}
 			},
 			{
@@ -479,7 +458,6 @@ local t = Def.ActorFrame {
 		local overlay = self:GetParent()
 		screen:RemoveInputCallback(testinput_input)
 		screen:RemoveInputCallback(leaderboard_input)
-		screen:RemoveInputCallback(acleaderboard_input)
 		screen:AddInputCallback(sortmenu_input)
 		for player in ivalues(PlayerNumber) do
 			SCREENMAN:set_input_redirected(player, true)
@@ -489,7 +467,6 @@ local t = Def.ActorFrame {
 		self:queuecommand("AssessAvailableChoices"):queuecommand("ShowSortMenu")
 		overlay:playcommand("HideTestInput")
 		overlay:playcommand("HideLeaderboard")
-		overlay:playcommand("HideACLeaderboard")
 	end,
 	DirectInputToTestInputCommand=function(self)
 		local screen = SCREENMAN:GetTopScreen()
@@ -514,18 +491,6 @@ local t = Def.ActorFrame {
 		self:playcommand("HideSortMenu")
 
 		overlay:playcommand("ShowLeaderboard")
-	end,
-	DirectInputToACLeaderboardCommand=function(self)
-		local screen = SCREENMAN:GetTopScreen()
-		local overlay = self:GetParent()
-		screen:RemoveInputCallback(sortmenu_input)
-		screen:AddInputCallback(acleaderboard_input)
-		for player in ivalues(PlayerNumber) do
-			SCREENMAN:set_input_redirected(player, true)
-		end
-		self:playcommand("HideSortMenu")
-
-		overlay:playcommand("ShowACLeaderboard")
 	end,
 	-- this returns input back to the engine and its ScreenSelectMusic
 	DirectInputToEngineCommand=function(self)

@@ -194,7 +194,7 @@ SL_CustomPrefs.Get = function()
 		},
 		-- - - - - - - - - - - - - - - - - - - -
 		-- MenuTimer values for various screens
-		ScreenGrooveStatsLoginMenuTimer =
+		ScreenECFACloudLoginMenuTimer =
 		{
 			Default = 30,
 			Choices = map(SecondsToMSS, range(15, 90, 5)),
@@ -337,19 +337,8 @@ SL_CustomPrefs.Get = function()
 			Values  = { true, false }
 		},
 		-- - - - - - - - - - - - - - - - - - - -
-		EnableGrooveStats = {
-			Default = true,
-			Choices =  { THEME:GetString("ThemePrefs","Yes"), THEME:GetString("ThemePrefs", "No") },
-			Values  = { true, false }
-		},
-
-		AutoDownloadUnlocks = {
-			Default = true,
-			Choices =  { THEME:GetString("ThemePrefs","Yes"), THEME:GetString("ThemePrefs", "No") },
-			Values  = { true, false }
-		},
-
-		SeparateUnlocksByPlayer = {
+		-- ECFA Cloud (score tracking and leaderboards)
+		EnableECFACloud = {
 			Default = true,
 			Choices =  { THEME:GetString("ThemePrefs","Yes"), THEME:GetString("ThemePrefs", "No") },
 			Values  = { true, false }
@@ -364,28 +353,10 @@ SL_CustomPrefs.Get = function()
 			},
 			Values = { "Always", "Sometimes", "Never" }
 		},
-    
-		EnableOnlineLobbies = {
-			Default = false,
-			Choices =  { THEME:GetString("ThemePrefs","Yes"), THEME:GetString("ThemePrefs", "No") },
-			Values  = { true, false }
-		},
-
-		EnableOnlineLobbies = {
-			Default = false,
-			Choices =  { THEME:GetString("ThemePrefs","Yes"), THEME:GetString("ThemePrefs", "No") },
-			Values  = { true, false }
-		},
 
 		-- - - - - - - - - - - - - - - - - - - -
 		-- new Zmod stuff
 		-- - - - - - - - - - - - - - - - - - - -
-		EnableBoogieStats = {
-			Default = false,
-			Choices =  { THEME:GetString("ThemePrefs","Yes"), THEME:GetString("ThemePrefs", "No") },
-			Values  = { true, false }
-		},
-		
 		CloseFolderCodes = {
 			Default = "None",
 			Choices = { "None", "Up-Down", "Down-Up", "Select-MenuUp" },
@@ -437,14 +408,6 @@ SL_CustomPrefs.Get = function()
 			Choices = { THEME:GetString("ThemePrefs", "On"), THEME:GetString("ThemePrefs", "Off") },
 			Values = { true, false }
 		},
-
-		-- Arrow Cloud Options
-		HideGrooveStats =
-		{
-			Default = false,
-			Choices = { THEME:GetString("ThemePrefs", "Yes"), THEME:GetString("ThemePrefs", "No") },
-			Values = { true, false }
-		}
 	}
 end
 
