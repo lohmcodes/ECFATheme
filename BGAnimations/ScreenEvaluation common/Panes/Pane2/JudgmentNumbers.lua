@@ -44,6 +44,8 @@ local windows = {SL[pn].ActiveModifiers.TimingWindows[1]}
 for v in ivalues( SL[pn].ActiveModifiers.TimingWindows) do
 	windows[#windows + 1] = v
 end
+-- Waterfall's simulated ITG play has no Decents (they count as Way Offs).
+if SL.Global.GameMode == "Waterfall" then windows[5] = false end
 
 -- do "regular" TapNotes first
 for i=1,#TapNoteScores.Types do

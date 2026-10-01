@@ -58,6 +58,8 @@ local windows = {SL[pn].ActiveModifiers.TimingWindows[1]}
 for v in ivalues(SL[pn].ActiveModifiers.TimingWindows) do
 	windows[#windows + 1] = v
 end
+-- Waterfall's simulated ITG play has no Decents (they count as Way Offs).
+if SL.Global.GameMode == "Waterfall" then windows[5] = false end
 
 -- Shift labels left if any tap note counts exceeded 9999
 -- The positioning logic breaks if we get to 7 digits, please nobody hit a million Fantastics

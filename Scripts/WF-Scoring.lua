@@ -11,13 +11,13 @@
 -- Everything is indexed by player number (1 or 2).
 
 -- ITG windows in seconds, including ITG's +1.5ms TimingWindowAdd.
--- Fantastic+ (15ms) is the EX "blue" window.
+-- Fantastic+ (15ms) is the EX "blue" window. Decents are off, as in Waterfall:
+-- anything past a Great is a Way Off.
 WF.ITGWindows = {
 	FantasticPlus = 0.015,
 	Fantastic = 0.023,
 	Excellent = 0.0445,
 	Great = 0.1035,
-	Decent = 0.1365,
 	WayOff = 0.1815,
 }
 
@@ -44,7 +44,8 @@ WF.InitScoring = function()
 end
 
 -- The ITG judgment for an engine judgment, as an ex_counts key:
--- "W0" (Fantastic within 15ms), "W1".."W5", "Miss", "HitMine", "Held" or "LetGo",
+-- "W0" (Fantastic within 15ms), "W1".."W3", "W5" (never "W4": hits in ITG's
+-- Decent range count as Way Offs), "Miss", "HitMine", "Held" or "LetGo",
 -- or "MissedHold" (a hold whose head was missed: scored like LetGo, but costs no life).
 -- Returns nil for judgments that don't count (dodged mines and the like).
 -- Hits outside Waterfall's 160ms Fault window are already misses, so ITG's
@@ -67,7 +68,6 @@ WF.SimulateITGJudgment = function(params)
 	if offset <= w.Fantastic then return "W1" end
 	if offset <= w.Excellent then return "W2" end
 	if offset <= w.Great then return "W3" end
-	if offset <= w.Decent then return "W4" end
 	return "W5"
 end
 

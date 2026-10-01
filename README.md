@@ -43,7 +43,7 @@ The play modes are **Waterfall** and Casual.
 - **FA+**: Masterfuls within 12.5 ms (10 ms with the smaller split) are counted and can be shown split in the
   judgment font, step statistics and error bars.
 - **Secondary ITG/EX score** (`Scripts/WF-Scoring.lua`): every tap's offset is re-judged with ITG's windows
-  and run through a simulated ITG lifebar. That feeds everything that used to show EX (EX score display,
+  (with Decents off: hits in the Decent range count as Way Offs) and run through a simulated ITG lifebar. That feeds everything that used to show EX (EX score display,
   Hard EX, evaluation Pane 2, rival pace). Hits outside Waterfall's 160 ms Fault window are already misses,
   so ITG's widest window (181.5 ms) is approximate.
 - Local high scores are saved to the profile's `Waterfall-Stats.xml`.
