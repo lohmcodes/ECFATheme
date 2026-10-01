@@ -1095,7 +1095,21 @@ GetChartInfoForECFACloud = function(player)
 	return info
 end
 
+-- Hex-encodes binary data, 4 KB at a time.
+local HexEncode = function(data)
+	local parts, chunk = {}, 4096
+	local fullFormat = string.rep("%02x", chunk)
+	for i = 1, #data, chunk do
+		local j = math.min(i + chunk - 1, #data)
+		local format = (j - i + 1 == chunk) and fullFormat or string.rep("%02x", j - i + 1)
+		parts[#parts+1] = format:format(data:byte(i, j))
+	end
+	return table.concat(parts)
+end
+
 -- Uploads a banner image that ECFA Cloud reported missing after a submission.
+-- It's sent as hex text: ITGmania's HTTP client cuts binary request bodies off
+-- at the first zero byte.
 UploadBannerToECFACloud = function(hash, path, apiKey)
 	if not (hash and path and apiKey) then return end
 	local f = RageFileUtil.CreateRageFile()
@@ -1104,12 +1118,12 @@ UploadBannerToECFACloud = function(hash, path, apiKey)
 	f:destroy()
 	if not data or #data == 0 then return end
 	NETWORK:HttpRequest{
-		url=GetECFACloudURL().."/api/v1/banners?hash="..hash,
+		url=GetECFACloudURL().."/api/v1/banners?encoding=hex&hash="..hash,
 		method="POST",
-		body=data,
+		body=HexEncode(data),
 		headers={
 			["x-api-key-player-1"]=apiKey,
-			["Content-Type"]="application/octet-stream",
+			["Content-Type"]="text/plain",
 		},
 		connectTimeout=15,
 		transferTimeout=60,
