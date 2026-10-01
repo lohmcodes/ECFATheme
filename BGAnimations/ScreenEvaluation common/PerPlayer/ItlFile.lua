@@ -1,7 +1,6 @@
 local player = ...
 
-if (SL.Global.GameMode == "Casual" or
-		GAMESTATE:IsCourseMode() or
+if (GAMESTATE:IsCourseMode() or
 		not IsItlActive() or
 		not IsItlSong(player) or
 		GAMESTATE:GetCurrentGame():GetName() ~= "dance") then

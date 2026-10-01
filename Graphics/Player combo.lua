@@ -14,7 +14,7 @@ if mods.HideCombo or combo_font == nil then
 	return Def.Actor{ InitCommand=function(self) self:visible(false) end }
 end
 
--- combo colors used in Casual and ITG
+-- ITG combo colors (replaced by Waterfall's below)
 local colors = {}
 colors.FullComboW1 = {color("#C8FFFF"), color("#6BF0FF")} -- blue combo
 colors.FullComboW2 = {color("#FDFFC9"), color("#FDDB85")} -- gold combo

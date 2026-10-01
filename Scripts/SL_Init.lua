@@ -62,8 +62,8 @@ local PlayerDefaults = {
 				HideEarlyDecentWayOffFlash = false,
 				ShowEarlyDecentWayOffColumn = false,
 
-				-- While SL no longer supports disabling individual timing windows
-				-- in ITG mode, Casual mode still does so we still track it here.
+				-- Waterfall is always played with every timing window on (ECFA Cloud
+				-- checks this before submitting).
 				TimingWindows = {true, true, true, true, true},
 				ShowFaPlusWindow = false,
 				ShowExScore = false,
@@ -177,12 +177,11 @@ local GlobalDefaults = {
 				PlayerOptions4 = Branch.GameplayScreen(),
 			}
 			self.ContinuesRemaining = ThemePrefs.Get("NumberOfContinuesAllowed") or 0
-			self.GameMode = ValidGameMode(ThemePrefs.Get("DefaultGameMode"))
+			self.GameMode = "Waterfall"
 			self.ScreenshotTexture = nil
 			self.MenuTimer = {
 				ScreenECFACloudLogin  = ThemePrefs.Get("ScreenECFACloudLoginMenuTimer"),
 				ScreenSelectMusic       = ThemePrefs.Get("ScreenSelectMusicMenuTimer"),
-				ScreenSelectMusicCasual = ThemePrefs.Get("ScreenSelectMusicCasualMenuTimer"),
 				ScreenPlayerOptions     = ThemePrefs.Get("ScreenPlayerOptionsMenuTimer"),
 				ScreenEvaluation        = ThemePrefs.Get("ScreenEvaluationMenuTimer"),
 				ScreenEvaluationNonstop = ThemePrefs.Get("ScreenEvaluationNonstopMenuTimer"),
@@ -280,14 +279,6 @@ SL = {
 		},
 		-- ITG and FA+ colors are still used for the simulated ITG/EX judgments
 		-- (see SimulateITGJudgment in WF-Scoring.lua).
-		Casual = {
-			color("#21CCE8"),	-- blue
-			color("#e29c18"),	-- gold
-			color("#66c955"),	-- green
-			color("#b45cff"),	-- purple (greatly lightened)
-			color("#c9855e"),	-- peach?
-			color("#ff3030")	-- red (slightly lightened)
-		},
 		ITG = {
 			color("#21CCE8"),	-- blue
 			color("#e29c18"),	-- gold
@@ -432,41 +423,6 @@ SL = {
 
 			InitialValue=0.5,
 		},
-		Casual = {
-			PercentScoreWeightW1=3,
-			PercentScoreWeightW2=2,
-			PercentScoreWeightW3=1,
-			PercentScoreWeightW4=0,
-			PercentScoreWeightW5=0,
-			PercentScoreWeightMiss=0,
-			PercentScoreWeightLetGo=0,
-			PercentScoreWeightHeld=3,
-			PercentScoreWeightHitMine=-1,
-			PercentScoreWeightCheckpointHit=0,
-
-			GradeWeightW1=3,
-			GradeWeightW2=2,
-			GradeWeightW3=1,
-			GradeWeightW4=0,
-			GradeWeightW5=0,
-			GradeWeightMiss=0,
-			GradeWeightLetGo=0,
-			GradeWeightHeld=3,
-			GradeWeightHitMine=-1,
-			GradeWeightCheckpointHit=0,
-
-			LifePercentChangeW1=0,
-			LifePercentChangeW2=0,
-			LifePercentChangeW3=0,
-			LifePercentChangeW4=0,
-			LifePercentChangeW5=0,
-			LifePercentChangeMiss=0,
-			LifePercentChangeLetGo=0,
-			LifePercentChangeHeld=0,
-			LifePercentChangeHitMine=0,
-
-			InitialValue=0.5,
-		},
 		ITG = {
 			PercentScoreWeightW1=5,
 			PercentScoreWeightW2=4,
@@ -598,25 +554,6 @@ SL = {
 	-- Latest version available for ITGmania.
 	ITGmaniaLatestVersion = nil,
 }
-
--- Casual mode plays with Waterfall timing and scoring too, but with only three
--- judgments (OK and Fault are turned off), so Solid stretches to cover OK's window.
--- It also has a simplified song select and no lifebar.
-SL.Preferences.Casual = {}
-for key, value in pairs(SL.Preferences.Waterfall) do SL.Preferences.Casual[key] = value end
-SL.Preferences.Casual.TimingWindowSecondsW3 = SL.Preferences.Waterfall.TimingWindowSecondsW4
-SL.Preferences.Casual.TimingWindowSecondsW5 = SL.Preferences.Waterfall.TimingWindowSecondsW4
-SL.JudgmentColors.Casual = SL.JudgmentColors.Waterfall
-for key, value in pairs(SL.Metrics.Waterfall) do
-	if not key:match("^LifePercentChange") then SL.Metrics.Casual[key] = value end
-end
-
--- The game modes a player can pick. Old ThemePrefs/profiles may still say "ITG"
--- or "FA+", which map to Waterfall.
-function ValidGameMode(mode)
-	if mode == "Casual" then return "Casual" end
-	return "Waterfall"
-end
 
 
 

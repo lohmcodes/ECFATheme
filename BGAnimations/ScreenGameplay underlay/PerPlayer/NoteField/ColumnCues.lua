@@ -2,7 +2,6 @@ local player = ...
 local pn = ToEnumShortString(player)
 
 local mods = SL[pn].ActiveModifiers
-if SL.Global.GameMode == "Casual" then return end
 if not mods.ColumnCues and not mods.ColumnCountdown then return end
 
 local columnMapping = GetColumnMapping(player)

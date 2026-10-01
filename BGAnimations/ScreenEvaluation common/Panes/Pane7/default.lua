@@ -21,7 +21,7 @@ else
 
 	for i, passed_check in ipairs(checks) do
 		if passed_check == false then
-			-- the 4th check is GameMode (ITG, Casual, etc.)
+			-- the 4th check is GameMode (Waterfall)
 			if i==4 then
 				-- that string has a %s token so we can pass in the current SL GameMode
 				text = text .. ScreenString("QRInvalidScore"..i):format(SL.Global.GameMode) .. "\n"

@@ -88,8 +88,8 @@ end
 pane[#pane+1] = list
 
 pane[#pane+1] = Def.Sprite{
-	Texture=THEME:GetPathG("","ECFACloud.png"),
-	InitCommand=function(self) self:zoom(0.3):xy(165, 25) end,
+	Texture=THEME:GetPathG("","ECFA logo small.png"),
+	InitCommand=function(self) self:zoom(56 / self:GetWidth()):xy(165, 25) end,
 }
 
 return pane

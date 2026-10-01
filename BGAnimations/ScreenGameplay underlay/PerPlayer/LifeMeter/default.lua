@@ -2,9 +2,6 @@ local player = ...
 local pn = ToEnumShortString(player)
 if SL[pn].ActiveModifiers.HideLifebar then return end
 
--- Casual has no lifebar.
-if SL.Global.GameMode ~= "Waterfall" then return end
-
 -- One meter per Waterfall lifebar (Easy, Normal, Hard), drawn on top of each
 -- other. Only the player's preferred lifebar is shown; when it fails, the next
 -- easier one takes its place (see WF.VisibleLifeBar in Scripts/WF-LifeBars.lua).

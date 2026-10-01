@@ -81,7 +81,6 @@ t[#t+1] = Def.Quad {
 -- I like OptionRows because, as a system, it manages nearly all input handling out of the box,
 -- including 3Key input (traditional DDR arcade cabs), 4Key input(ITG dedicabs), keyboard
 -- input, etc. Handling input is complicated and tedious at best.
--- See ScreenSelectMusicCasual if you want an example.
 --
 ------ HOW ARE YOU USING ACTORPROXIES TO DRAW VISUALS IN OPTIONROWS?
 -- So, I stuffed one ActorProxy per-player into each OptionRow Frame and devised a hackish

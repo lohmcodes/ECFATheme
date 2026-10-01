@@ -375,6 +375,20 @@ local af = Def.ActorFrame{
 				UpdatePathMap(player, SL[pn].Streams.Hash)
 			end
 
+			-- Charts looked at in the last minute are cached (see RemoveStaleCachedRequests).
+			local cacheKey = CRYPTMAN:SHA256String(SL[pn].Streams.Hash..SL[pn].ApiKey.."-player-leaderboards")
+			local cached = SL.ECFACloud.RequestCache[cacheKey]
+			if cached then
+				-- drop any request still running for the previous chart (and its spinner)
+				if self.request_handler then
+					self.request_handler:Cancel()
+					self.request_handler = nil
+				end
+				self:GetChild("Spinner"):visible(false)
+				LeaderboardRequestProcessor(cached.Response, {parent=parent, generation=requestGeneration})
+				return
+			end
+
 			-- We technically will send two requests in ultrawide versus mode since
 			-- both players will have their own individual scoreboxes.
 			-- Should be fine though.
@@ -383,7 +397,13 @@ local af = Def.ActorFrame{
 				method="GET",
 				headers=headers,
 				timeout=10,
-				callback=LeaderboardRequestProcessor,
+				callback=function(res, args)
+					-- Remember it briefly, so coming back to this chart is instant.
+					if not res.error and res.statusCode == 200 then
+						SL.ECFACloud.RequestCache[cacheKey] = { Response=res, Timestamp=GetTimeSinceStart() }
+					end
+					LeaderboardRequestProcessor(res, args)
+				end,
 				args={parent=parent, generation=requestGeneration},
 			})
 		end,
@@ -436,10 +456,10 @@ local af = Def.ActorFrame{
 	},
 	-- ECFA Cloud Logo
 	Def.Sprite{
-		Texture=THEME:GetPathG("", "ECFACloud.png"),
+		Texture=THEME:GetPathG("", "ECFA logo small.png"),
 		Name="ECFACloudLogo",
 		InitCommand=function(self)
-			self:zoom(0.8):diffusealpha(0.5)
+			self:zoom(110 / self:GetWidth()):diffusealpha(0.5)
 		end,
 		LoopScoreboxCommand=function(self)
 			self:visible(true)

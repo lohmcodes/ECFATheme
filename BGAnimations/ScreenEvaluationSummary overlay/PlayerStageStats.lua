@@ -4,20 +4,9 @@ local LetterGradesAF
 local playerStats
 local steps, meter, difficulty, stepartist, grade, score
 local TNSTypes = { 'W0', 'W1', 'W2', 'W3', 'W4', 'W5', 'Miss' }
-local Colors = {
-			SL.JudgmentColors["ITG"][1],
-			SL.JudgmentColors["FA+"][2], -- Get the Fantastic White Window
-			SL.JudgmentColors["ITG"][2],
-			SL.JudgmentColors["ITG"][3],
-			SL.JudgmentColors["ITG"][4],
-			SL.JudgmentColors["ITG"][5], 
-			SL.JudgmentColors["ITG"][6],
-		}
 -- Waterfall judgments; W0/W1 are Masterfuls inside/outside the FA+ window (see Storage.lua)
-if SL.Global.GameMode ~= "Casual" then
-	local wf = SL.JudgmentColors.Waterfall
-	Colors = { wf[1], lerp_color(0.5, wf[1], Color.White), wf[2], wf[3], wf[4], wf[5], wf[6] }
-end
+local wf = SL.JudgmentColors.Waterfall
+local Colors = { wf[1], lerp_color(0.5, wf[1], Color.White), wf[2], wf[3], wf[4], wf[5], wf[6] }
 
 -- variables for positioning and horizalign, dependent on playernumber
 local col1x, col2x, gradex, align1, align2

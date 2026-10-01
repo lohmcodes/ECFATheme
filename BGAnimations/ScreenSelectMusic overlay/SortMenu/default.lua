@@ -387,11 +387,6 @@ local t = Def.ActorFrame {
 			-- The second element's table contains that options will show under this category.
 			-- It follows the same structure as the top level table.
 
-			-- Casual players often choose the wrong mode and an experienced player in the area may notice this
-			-- and offer to switch them back to casual mode. This allows them to do so again.
-			-- It's technically not possible to reach the sort menu in Casual Mode, but juuust in case let's still
-			-- include the check.
-			--
 			-- Only show GoBack if we're in 3 key navigation mode, as it's redundant in 5 key.
 			{ { "", "GoBack" }, PREFSMAN:GetPreference("ThreeKeyNavigation") },
 			{ {"NextPlease", "SwitchProfile"}, ThemePrefs.Get("AllowScreenSelectProfile") },
@@ -399,7 +394,6 @@ local t = Def.ActorFrame {
 			{ {"WhereforeArtThou", "SongSearch"}, not GAMESTATE:IsCourseMode() and ThemePrefs.Get("KeyboardFeatures") },
 			{ {"ImLovinIt", "AddFavorite"}, function() return GAMESTATE:GetCurrentSong() ~= nil end},
 			{ {"MixTape", "Preferred"}, AddFavorites },
-			{ {"ChangeMode", "Casual"}, SL.Global.Stages.PlayedThisGame == 0 and SL.Global.GameMode ~= "Casual" },
 			{ {"ChangePlayMode", "Nonstop"}, not GAMESTATE:IsCourseMode() and ChangePlayModeAvailable() },
 			{ {"ChangePlayMode", "Regular"}, GAMESTATE:IsCourseMode() and ChangePlayModeAvailable() },
 			{

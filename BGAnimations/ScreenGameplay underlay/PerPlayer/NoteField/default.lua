@@ -39,14 +39,10 @@ af[#af+1] = LoadActor("ErrorBar/default.lua", player, layout.ErrorBar)
 af[#af+1] = LoadActor("MeasureCounter.lua", player, layout.MeasureCounter)
 af[#af+1] = LoadActor("SubtractiveScoring.lua", player, layout.SubtractiveScoring)
 af[#af+1] = LoadActor("ColumnCues.lua", player)
-af[#af+1] = LoadActor("DisplayMods.lua", player) 
-
--- zmod specific elements
-if SL.Global.GameMode ~= "Casual" then
-	af[#af+1] = LoadActor("RunTimer.lua", player, layout.SubtractiveScoring.y, layout.MeasureCounter)
-	af[#af+1] = LoadActor("BrokenRunCounter.lua", player, layout.MeasureCounter)
-	af[#af+1] = LoadActor("OffsetDisplay.lua", player)
-	af[#af+1] = LoadActor("JudgmentBack.lua", player)
-end
+af[#af+1] = LoadActor("DisplayMods.lua", player)
+af[#af+1] = LoadActor("RunTimer.lua", player, layout.SubtractiveScoring.y, layout.MeasureCounter)
+af[#af+1] = LoadActor("BrokenRunCounter.lua", player, layout.MeasureCounter)
+af[#af+1] = LoadActor("OffsetDisplay.lua", player)
+af[#af+1] = LoadActor("JudgmentBack.lua", player)
 
 return af

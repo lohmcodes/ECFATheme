@@ -1,5 +1,5 @@
 local game = GAMESTATE:GetCurrentGame():GetName()
-local ScreenName, TopScreen, MPN = nil, nil, GAMESTATE:GetMasterPlayerNumber()
+local ScreenName, TopScreen = nil, nil
 local choices = {}
 
 local arrow	= {
@@ -94,14 +94,8 @@ end
 local function YieldStepPattern(i, dir)
 
 	local step = Def.ActorFrame{
-		InitCommand=function(self) self:queuecommand("Update"):MaskDest() end,
+		InitCommand=function(self) self:MaskDest() end,
 		OnCommand=function(self) self:queuecommand("FirstLoopRegular") end,
-		UpdateCommand=function(self)
-			self:visible(true)
-			if ScreenName == "ScreenSelectPlayMode" and TopScreen:GetSelectionIndex(MPN) == 0 and i % 3 ~= 0 then
-				self:visible(false)
-			end
-		end,
 		FirstLoopRegularCommand=function(self)
 			self:stoptweening()
 

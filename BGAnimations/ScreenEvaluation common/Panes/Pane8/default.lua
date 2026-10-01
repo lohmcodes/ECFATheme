@@ -18,10 +18,10 @@ local args = { Player=player, RowHeight=22, HideScores=true }
 args.NumHighScores = 10
 
 pane[#pane+1] = Def.Sprite{
-	Texture=THEME:GetPathG("","ECFACloud.png"),
+	Texture=THEME:GetPathG("","ECFA logo.png"),
 	Name="ECFACloud_Logo",
 	InitCommand=function(self)
-		self:zoom(1.5)
+		self:zoom(200 / self:GetWidth())
 		self:addx(0):addy(100)
 		self:diffusealpha(0.5)
 	end,

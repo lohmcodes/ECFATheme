@@ -1,7 +1,5 @@
 local player = ...
 
-if SL.Global.GameMode == "Casual" then return end
-
 local optionslist = GetPlayerOptionsString(player)
 
 local af = Def.ActorFrame{

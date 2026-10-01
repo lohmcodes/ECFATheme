@@ -17,9 +17,6 @@
 -- transient judgment data to persist beyond ScreenGameplay.
 ------------------------------------------------------------
 
--- don't bother tracking per-column judgment data in Casual gamemode
-if SL.Global.GameMode == "Casual" then return end
-
 local player = ...
 local pn = ToEnumShortString(player)
 local mods = SL[pn].ActiveModifiers

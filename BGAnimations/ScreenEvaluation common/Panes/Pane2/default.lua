@@ -5,11 +5,6 @@
 local player = unpack(...)
 local pn = ToEnumShortString(player)
 
--- Not in Casual mode.
-if SL.Global.GameMode ~= "Waterfall" then
-	return
-end
-
 return Def.ActorFrame{
 	-- score displayed as a percentage
 	LoadActor("./Percentage.lua", ...),

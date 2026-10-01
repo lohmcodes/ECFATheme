@@ -73,15 +73,6 @@ SL_CustomPrefs.Get = function()
 			Choices = { THEME:GetString("ThemePrefs","Yes"), THEME:GetString("ThemePrefs", "No") },
 			Values  = { true, false }
 		},
-		DefaultGameMode =
-		{
-			Default = "Waterfall",
-			Choices = {
-				THEME:GetString("ScreenSelectPlayMode", "Casual"),
-				THEME:GetString("ScreenSelectPlayMode", "Waterfall"),
-			},
-			Values = { "Casual", "Waterfall" }
-		},
 		DefaultSort =
 		{
 			Default = "Series",
@@ -206,12 +197,6 @@ SL_CustomPrefs.Get = function()
 			Choices = map(SecondsToMSS, range(60, 450, 15)),
 			Values  = range(60, 450, 15),
 		},
-		ScreenSelectMusicCasualMenuTimer =
-		{
-			Default = 300,
-			Choices = map(SecondsToMSS, range(60, 450, 15)),
-			Values  = range(60, 450, 15),
-		},
 		ScreenPlayerOptionsMenuTimer =
 		{
 			Default = 90,
@@ -257,12 +242,6 @@ SL_CustomPrefs.Get = function()
 			Choices = { THEME:GetString("ThemePrefs","Yes"), THEME:GetString("ThemePrefs", "No") },
 			Values  = { true, false }
 		},
-		AllowScreenSelectPlayMode =
-		{
-			Default = true,
-			Choices = { THEME:GetString("ThemePrefs","Yes"), THEME:GetString("ThemePrefs", "No") },
-			Values  = { true, false }
-		},
 		AllowScreenSelectPlayMode2 =
 		{
 			Default = true,
@@ -285,20 +264,6 @@ SL_CustomPrefs.Get = function()
 		{
 			Default = true,
 			Choices = { THEME:GetString("ThemePrefs","Yes"), THEME:GetString("ThemePrefs", "No") },
-			Values  = { true, false }
-		},
-		-- - - - - - - - - - - - - - - - - - - -
-		-- Casual GameMode Settings
-		CasualMaxMeter = {
-			Default = 10,
-			Choices = range(5, 15, 1),
-			Values  = range(5, 15, 1)
-		},
-		-- - - - - - - - - - - - - - - - - - - -
-		-- SM5.1's ImageCache System (used in CasualMode)
-		UseImageCache = {
-			Default = false,
-			Choices =  { THEME:GetString("ThemePrefs","Yes"), THEME:GetString("ThemePrefs", "No") },
 			Values  = { true, false }
 		},
 		-- - - - - - - - - - - - - - - - - - - -

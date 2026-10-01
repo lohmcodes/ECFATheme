@@ -2,7 +2,7 @@ local choices, choice_actors = {}, {}
 local TopScreen = nil
 -- give this a value now, before the TopScreen has been prepared and we can fetch its name
 -- we'll reassign it appropriately below, once the TopScreen is available
-local ScreenName = "ScreenSelectPlayMode"
+local ScreenName = "ScreenSelectPlayMode2"
 
 local cursor = {
 	h = 40,
@@ -31,23 +31,6 @@ local Update = function(af, delta)
 	end
 end
 
-local InputHandler = function(event)
-	if not event.PlayerNumber or not event.button then return false end
-
-	if event.type == "InputEventType_FirstPress" then
-		if event.GameButton == "Start" then
-			if ScreenName=="ScreenSelectPlayMode" or ScreenName=="ScreenSelectPlayModeThonk" then
-				SL.Global.GameMode = choices[cursor.index+1]
-				-- now that a GameMode has been selected, set related preferences
-				SetGameModePreferences()
-				-- and reload the theme's Metrics
-				THEME:ReloadMetrics()
-				SCREENMAN:GetTopScreen():StartTransitioningScreen("SM_GoToNextScreen")
-			end
-		end
-	end
-end
-
 local t = Def.ActorFrame{
 	InitCommand=function(self)
 		self:SetUpdateFunction( Update )
@@ -66,7 +49,6 @@ local t = Def.ActorFrame{
 			choices[#choices+1] = choice
 			choice_actors[#choice_actors+1] = TopScreen:GetChild("IconChoice"..choice)
 		end
-    	SCREENMAN:GetTopScreen():AddInputCallback(InputHandler)
 
 		self:queuecommand("Update")
 	end,
@@ -130,13 +112,6 @@ local t = Def.ActorFrame{
 	Def.ActorFrame{
 		Name="Cursor",
 		OnCommand=function(self)
-			-- it is possible for players to have something other than "Waterfall" as the default choice
-			-- for ScreenSelectPlayMode (see: Simply Love Options in the Operator Menu)
-			-- account for that here, in the OnCommand of the cursor ActorFrame, by updating cursor.index
-			-- to match the value of ThemePrefs.Get("DefaultGameMode") in the choices table
-			if ScreenName == "ScreenSelectPlayMode" then
-				cursor.index = (FindInTable(ValidGameMode(ThemePrefs.Get("DefaultGameMode")), choices) or 2) - 1
-			end
 			self:x(-150):y( -60 + (cursor.h * cursor.index) )
 		end,
 		UpdateCommand=function(self)
@@ -164,17 +139,8 @@ local t = Def.ActorFrame{
 		end,
 		OffCommand=function(self) self:sleep(0.4):linear(0.2):diffusealpha(0) end,
 		UpdateCommand=function(self)
-			if ScreenName == "ScreenSelectPlayMode" then
-				if choices[cursor.index+1] == "Casual" then
-					self:stoptweening():linear(0.25):diffusealpha(0)
-				else
-					self:settext("77.41")
-					self:stoptweening():linear(0.25):diffusealpha(1)
-				end
-			else
-				self:diffusealpha(1)
-				self:settext("77.41")
-			end
+			self:diffusealpha(1)
+			self:settext("77.41")
 		end,
 
 	},
@@ -184,15 +150,7 @@ local t = Def.ActorFrame{
 		InitCommand=function(self) self:diffusealpha(0) end,
 		OffCommand=function(self) self:sleep(0.4):linear(0.2):diffusealpha(0) end,
 		UpdateCommand=function(self)
-			if ScreenName == "ScreenSelectPlayMode" then
-				if choices[cursor.index+1] == "Waterfall" then
-					self:stoptweening():linear(0.25):diffusealpha(1)
-				else
-					self:stoptweening():linear(0.25):diffusealpha(0)
-				end
-			else
-				self:diffusealpha(1)
-			end
+			self:diffusealpha(1)
 		end,
 		-- lifemeter white border
 		Def.Quad{

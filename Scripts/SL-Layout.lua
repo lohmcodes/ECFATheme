@@ -16,11 +16,6 @@ function GetGameplayLayout(player, reverse)
         Combo = { y = comboY },
     }
 
-    -- In casual mode none of the other elements are displayed, so shortcut.
-    if SL.Global.GameMode == "Casual" then
-        return layout
-    end
-
     local topY = judgmentY - judgmentHeight/2
     local bottomY = judgmentY + judgmentHeight/2
 	

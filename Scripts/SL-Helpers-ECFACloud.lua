@@ -356,8 +356,7 @@ ValidForECFACloud = function(player)
 	-- Courses/Marathons are not ranked on ECFA Cloud.
 	valid[3] = not GAMESTATE:IsCourseMode()
 
-	-- ECFA Cloud ranks scores judged with Waterfall settings. Casual uses the
-	-- same windows but a different presentation and no lifebars.
+	-- ECFA Cloud ranks scores judged with Waterfall settings.
 	valid[4] = SL.Global.GameMode == "Waterfall"
 
 	-- ------------------------------------------

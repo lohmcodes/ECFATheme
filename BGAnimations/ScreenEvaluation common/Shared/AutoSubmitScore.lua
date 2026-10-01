@@ -215,6 +215,9 @@ local AutoSubmitRequestProcessor = function(res, ctx)
 		return
 	end
 
+	-- Leaderboards cached in song select (scorebox, pane) are out of date now.
+	SL.ECFACloud.RequestCache = {}
+
 	local panes = overlay:GetChild("Panes")
 	local data = JsonDecode(res.body)
 	local succeeded = {}
@@ -507,10 +510,10 @@ for i=1,2 do
 	}
 
 	af[#af+1] = Def.Sprite{
-		Texture=THEME:GetPathG("","ECFACloud.png"),
+		Texture=THEME:GetPathG("","ECFA logo small.png"),
 		Name="P"..i.."ECFACloud_Logo",
 		InitCommand=function(self)
-			self:zoom(0.2)
+			self:zoom(40 / self:GetWidth())
 			self:visible(false)
 		end,
 	}

@@ -51,10 +51,6 @@ SelectMusicOrCourse = function()
 	if GAMESTATE:IsCourseMode() then
 		return "ScreenSelectCourse"
 	else
-		if SL.Global.GameMode == "Casual" then
-			return "ScreenSelectMusicCasual"
-		end
-
 		return "ScreenSelectMusic"
 	end
 end
@@ -137,20 +133,17 @@ Branch.AfterScreenSelectColor = function()
 	return "ScreenSelectStyle"
 end
 
+-- Waterfall is the only GameMode, so there is no screen for choosing one.
 Branch.AllowScreenSelectPlayMode = function()
-	if ThemePrefs.Get("AllowScreenSelectPlayMode") then
-		return "ScreenSelectPlayMode"
-	else
-		return Branch.AllowScreenSelectPlayMode2()
-	end
+	return Branch.AllowScreenSelectPlayMode2()
 end
 
 Branch.AllowScreenSelectPlayMode2 = function()
-	-- now that a GameMode has been selected (or defaulted), set related preferences
+	-- set the GameMode's preferences
 	SetGameModePreferences()
 	-- and reload the theme's Metrics
 	THEME:ReloadMetrics()
-	if SL.Global.GameMode == "Waterfall" and ThemePrefs.Get("AllowScreenSelectPlayMode2") then
+	if ThemePrefs.Get("AllowScreenSelectPlayMode2") then
 		return "ScreenSelectPlayMode2"
 	else
 		return "ScreenProfileLoad"
@@ -158,12 +151,7 @@ Branch.AllowScreenSelectPlayMode2 = function()
 end
 
 Branch.AfterEvaluationStage = function()
-	-- If we're in Casual mode, don't save the profile(s).
-	if SL.Global.GameMode == "Casual" then
-		return Branch.AfterProfileSave()
-	else
-		return "ScreenProfileSave"
-	end
+	return "ScreenProfileSave"
 end
 
 Branch.AfterSelectPlayMode = function()
@@ -231,13 +219,7 @@ Branch.SSMCancel = function()
 end
 
 Branch.AllowScreenNameEntry = function()
-
-	-- If we're in Casual mode, don't allow NameEntry, and don't
-	-- bother saving the profile(s). Skip directly to GameOver.
-	if SL.Global.GameMode == "Casual" then
-		return Branch.AfterProfileSaveSummary()
-
-	elseif ThemePrefs.Get("AllowScreenNameEntry") then
+	if ThemePrefs.Get("AllowScreenNameEntry") then
 		return "ScreenNameEntryTraditional"
 
 	else

@@ -51,10 +51,10 @@ end
 -- get timing window in milliseconds
 
 GetTimingWindow = function(n, mode, tenms)
-	-- In Waterfall mode, "FA+" means the top window split at Waterfall's FA+
-	-- window: n=1 is a Masterful within 12.5ms (10ms with tenms), and n>=2 are
-	-- Waterfall's windows W1, W2, ...
-	if mode == "FA+" and SL.Global.GameMode ~= "Casual" and SL.Global.GameMode ~= "FA+" then
+	-- "FA+" means the top window split at Waterfall's FA+ window: n=1 is a
+	-- Masterful within 12.5ms (10ms with tenms), and n>=2 are Waterfall's
+	-- windows W1, W2, ...
+	if mode == "FA+" then
 		if n == 1 then return tenms and 0.010 or 0.0125 end
 		return GetTimingWindow(n - 1)
 	end
@@ -346,7 +346,7 @@ end
 -- -----------------------------------------------------------------------
 
 SetGameModePreferences = function()
-	-- apply the preferences associated with this SL GameMode (Casual, Waterfall)
+	-- apply the preferences associated with this SL GameMode (Waterfall)
 	for key,val in pairs(SL.Preferences[SL.Global.GameMode]) do
 		PREFSMAN:SetPreference(key, val)
 	end
@@ -355,15 +355,8 @@ SetGameModePreferences = function()
 	-- loop through human players and apply whatever mods need to be set now
 	for player in ivalues(GAMESTATE:GetHumanPlayers()) do
 		local pn = ToEnumShortString(player)
-		-- If we're switching to Casual mode,
-		-- we want to reduce the number of judgments,
-		-- so turn Decents and WayOffs off now.
-		if SL.Global.GameMode == "Casual" then
-			SL[pn].ActiveModifiers.TimingWindows = {true,true,true,false,false}
-		else
-			-- Waterfall is always played with every window (ECFA Cloud requires it).
-			SL[pn].ActiveModifiers.TimingWindows = {true,true,true,true,true}
-		end
+		-- Waterfall is always played with every window (ECFA Cloud requires it).
+		SL[pn].ActiveModifiers.TimingWindows = {true,true,true,true,true}
 
 		-- Now that we've set the SL table for TimingWindows appropriately,
 		-- use it to apply TimingWindows.
@@ -388,15 +381,9 @@ SetGameModePreferences = function()
 	--------------------------------------------
 	-- finally, load the Stats.xml file appropriate for this SL GameMode
 
-	-- these are the prefixes that are prepended to each custom Stats.xml, resulting in
-	-- Stats.xml, ECFA-Stats.xml, Casual-Stats.xml
-	local prefix = {}
-
 	-- Waterfall scores aren't comparable with the ITG scores in the main
-	-- Stats.xml, so they're kept separately.
-	prefix["Waterfall"] = "Waterfall-"
-
-	prefix["Casual"] = "Casual-"
+	-- Stats.xml, so they're kept separately, in Waterfall-Stats.xml.
+	local prefix = { Waterfall = "Waterfall-" }
 
 	if PROFILEMAN:GetStatsPrefix() ~= prefix[SL.Global.GameMode] then
 		PROFILEMAN:SetStatsPrefix(prefix[SL.Global.GameMode])
@@ -408,7 +395,7 @@ end
 -- manages for you back to their stock SM5 values.
 --
 -- These "managed" Preferences are listed in ./Scripts/SL_Init.lua
--- per-gamemode (Casual, ITG), and actively applied (and reapplied)
+-- per-gamemode (Waterfall), and actively applied (and reapplied)
 -- for each new game using SetGameModePreferences()
 --
 -- SL normally calls ResetPreferencesToStockSM5() from
@@ -658,8 +645,6 @@ end
 -- This includes the FA+ window (W0). Decents/WayOffs (W4/W5) will only exist in the
 -- resultant table if the windows were active.
 --
--- Should NOT be used in casual mode.
---
 -- Returns a table with the following keys:
 -- {
 --             "W0" -> the fantasticPlus count
@@ -796,8 +781,6 @@ CalculateSimulatedITGScore = function(player, ex_counts)
 end
 
 CalculateExScore = function(player, ex_counts, use_actual_w0_weight)
-	-- No EX scores in Casual mode, just return some dummy number early.
-	if SL.Global.GameMode == "Casual" then return 0 end
 	local StepsOrTrail = (GAMESTATE:IsCourseMode() and GAMESTATE:GetCurrentTrail(player)) or GAMESTATE:GetCurrentSteps(player)
 
 	local totalSteps = StepsOrTrail:GetRadarValues(player):GetValue( "RadarCategory_TapsAndHolds" )
@@ -864,8 +847,6 @@ end
 -- The W0 weight may have been modified for Tournament mode purposes.
 -- Use the optional boolean argument use_actual_w0_weight to choose to fallback to the proper W0 weight.
 CalculateHardExScore = function(player, ex_counts, use_actual_w0_weight)
-	-- No EX scores in Casual mode, just return some dummy number early.
-	if SL.Global.GameMode == "Casual" then return 0 end
 	local StepsOrTrail = (GAMESTATE:IsCourseMode() and GAMESTATE:GetCurrentTrail(player)) or GAMESTATE:GetCurrentSteps(player)
 
 	local totalSteps = StepsOrTrail:GetRadarValues(player):GetValue( "RadarCategory_TapsAndHolds" )

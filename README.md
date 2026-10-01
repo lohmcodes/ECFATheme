@@ -29,7 +29,7 @@ That host must also be in `HttpAllowHosts`.
 
 ## Waterfall judging
 
-The play modes are **Waterfall** and Casual.
+Waterfall is the only play mode.
 
 - **Timing windows**: Masterful 15 ms, Awesome 30 ms, Solid 50 ms, OK 100 ms, Fault 160 ms (holds 300 ms,
   mines 71.5 ms, rolls 350 ms). Weights 10 / 9 / 6 / 3 / 0 / 0 (miss), held 6, mine −3. The engine judges

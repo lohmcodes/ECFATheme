@@ -1,6 +1,5 @@
 -- Drives the Waterfall lifebars and scoring helpers (Scripts/WF-LifeBars.lua,
--- Scripts/WF-Scoring.lua) during gameplay. Casual mode has no lifebars.
-if SL.Global.GameMode ~= "Waterfall" then return end
+-- Scripts/WF-Scoring.lua) during gameplay.
 
 -- Start every ScreenGameplay with full lifebars and empty counts.
 WF.InitializeLifeBars()

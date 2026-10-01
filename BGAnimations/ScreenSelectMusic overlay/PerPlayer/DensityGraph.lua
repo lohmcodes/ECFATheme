@@ -140,7 +140,7 @@ af[#af+1] = Def.ActorFrame{
 		-- parse every chart we pass over, only the one we settle on.
 		-- Only needed for ECFA Cloud score/leaderboard lookups.
 		self:stoptweening()
-		self:sleep(0.4)
+		self:sleep(0.2)
 		self:queuecommand("ComputeHash")
 	end,
 	ComputeHashCommand=function(self)

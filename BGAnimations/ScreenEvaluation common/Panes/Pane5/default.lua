@@ -19,7 +19,6 @@ local worst_window = GetTimingWindow(num_judgments_available)
 
 local abbreviations = {
 	Waterfall = { "Mas", "Awe", "Sol", "OK", "Flt" },
-	Casual = { "Mas", "Awe", "Sol", "OK", "Flt" },
 	ITG = { "Fan", "Ex", "Gr", "Dec", "WO" },
 	["FA+"] = { "Fan", "Fan", "Ex", "Gr", "Dec" },
 }

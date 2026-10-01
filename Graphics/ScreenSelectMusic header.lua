@@ -142,9 +142,6 @@ af[#af+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Header")..{
 	OnCommand=function(self)
 		self:sleep(0.1):decelerate(0.33):diffusealpha(1)
 	end,
-	SLGameModeChangedMessageCommand=function(self)
-		self:settext(THEME:GetString("ScreenSelectPlayMode", SL.Global.GameMode))
-	end
 }
 
 -- P1 pad

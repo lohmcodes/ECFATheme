@@ -311,10 +311,10 @@ local af = Def.ActorFrame{
 	},
 	-- ECFA Cloud Logo
 	Def.Sprite{
-		Texture=THEME:GetPathG("", "ECFACloud.png"),
+		Texture=THEME:GetPathG("", "ECFA logo small.png"),
 		Name="ECFACloudLogo",
 		InitCommand=function(self)
-			self:zoom(0.8):diffusealpha(0.5)
+			self:zoom(110 / self:GetWidth()):diffusealpha(0.5)
 		end,
 		LoopScoreboxCommand=function(self)
 			if cur_style == 0 or cur_style == 1 then

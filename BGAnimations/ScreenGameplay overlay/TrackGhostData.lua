@@ -4,9 +4,6 @@
 -- If the user passed, it will compare ITG and EX and update ghost data if necessary
 ------------------------------------------------------------
 
--- don't bother tracking for Casual gamemode
-if SL.Global.GameMode == "Casual" then return end
-
 local player = ...
 local pn = ToEnumShortString(player)
 local mods = SL[pn].ActiveModifiers
