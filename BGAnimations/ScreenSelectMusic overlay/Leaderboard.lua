@@ -1,10 +1,15 @@
-local NumEntries = 13
-local RowHeight = 24
+-- As many rows as fit, in a smaller font than the header and footer.
+local NumEntries = 20
+local RowHeight = 16
+local TextZoom = 0.66
+-- The header (board name) and footer (More Leaderboards) rows.
+local HeaderHeight = 24
 local paneWidth2Player = 230
 
 -- Name column; blended rows narrow it to fit the source tag after the rank.
-local NameX, NameMaxWidth = -paneWidth2Player/2 + 100, 130
-local BlendedNameX, BlendedNameMaxWidth = -paneWidth2Player/2 + 113, 104
+-- (maxwidth is measured before the zoom.)
+local NameX, NameMaxWidth = -paneWidth2Player/2 + 100, 130 / TextZoom
+local BlendedNameX, BlendedNameMaxWidth = -paneWidth2Player/2 + 113, 104 / TextZoom
 
 -- source: a BlendedSource key ("ECFA", "GS" or "AC") for blended rows, else nil.
 local SetEntryText = function(rank, name, score, date, actor, source)
@@ -79,6 +84,7 @@ local SetLeaderboardForPlayer = function(player_num, leaderboard, leaderboardDat
 		if leaderboardData["Data"] then
 			local added = {}
 			for gsEntry in ivalues(leaderboardData["Data"]) do
+				if entryNum > NumEntries then break end
 				-- The blended board can list the same name once per source.
 				local key = blended and (gsEntry["source"].."\n"..gsEntry["name"]) or gsEntry["name"]
 				if not added[key] then
@@ -417,7 +423,7 @@ local af = Def.ActorFrame{
 
 local paneWidth1Player = 330
 local paneWidth = (GAMESTATE:GetNumSidesJoined() == 1) and paneWidth1Player or paneWidth2Player
-local paneHeight = 360
+local paneHeight = HeaderHeight * 2 + NumEntries * RowHeight + 4
 local borderWidth = 2
 
 for player in ivalues( PlayerNumber ) do
@@ -467,22 +473,22 @@ for player in ivalues( PlayerNumber ) do
 		-- Header border
 		Def.Quad {
 			InitCommand=function(self)
-				self:diffuse(Color.White):y(-paneHeight/2 + RowHeight/2)
+				self:diffuse(Color.White):y(-paneHeight/2 + HeaderHeight/2)
 			end,
 			RefreshCommand=function(self)
 				local width = self:GetParent():GetWidth()
-				self:zoomto(width + borderWidth, RowHeight + borderWidth)
+				self:zoomto(width + borderWidth, HeaderHeight + borderWidth)
 			end
 		},
 
 		-- Blue Header
 		Def.Quad {
 			InitCommand=function(self)
-				self:diffuse(Color.Blue):y(-paneHeight/2 + RowHeight/2)
+				self:diffuse(Color.Blue):y(-paneHeight/2 + HeaderHeight/2)
 			end,
 			RefreshCommand=function(self)
 				local width = self:GetParent():GetWidth()
-				self:zoomto(width, RowHeight)
+				self:zoomto(width, HeaderHeight)
 			end
 		},
 
@@ -601,7 +607,7 @@ for player in ivalues( PlayerNumber ) do
 		Def.ActorFrame{
 			Name="PaneIcons",
 			InitCommand=function(self)
-				self:y(paneHeight/2 - RowHeight/2)
+				self:y(paneHeight/2 - HeaderHeight/2)
 				self:visible(false)
 			end,
 			ResetEntryMessageCommand=function(self)
@@ -650,11 +656,7 @@ for player in ivalues( PlayerNumber ) do
 		af2[#af2+1] = Def.ActorFrame{
 			Name="LeaderboardEntry"..i,
 			InitCommand=function(self)
-				if NumEntries % 2 == 1 then
-					self:y(RowHeight*(i - (NumEntries+1)/2) )
-				else
-					self:y(RowHeight*(i - NumEntries/2))
-				end
+				self:y(RowHeight*(i - (NumEntries+1)/2))
 			end,
 			RefreshCommand=function(self)
 				local width = self:GetParent():GetWidth()
@@ -667,7 +669,7 @@ for player in ivalues( PlayerNumber ) do
 				Text="",
 				InitCommand=function(self)
 					self:horizalign(right)
-					self:maxwidth(30)
+					self:zoom(TextZoom):maxwidth(30 / TextZoom)
 					self:x(-paneWidth2Player/2 + 30 + borderWidth)
 					self:diffuse(Color.White)
 				end,
@@ -683,7 +685,7 @@ for player in ivalues( PlayerNumber ) do
 				Text="",
 				InitCommand=function(self)
 					self:horizalign(left)
-					self:zoom(0.75)
+					self:zoom(0.5)
 					self:x(-paneWidth2Player/2 + 36 + borderWidth)
 				end,
 				ResetEntryMessageCommand=function(self)
@@ -696,8 +698,8 @@ for player in ivalues( PlayerNumber ) do
 				Text=(i==1 and THEME:GetString("ECFACloud", "Loading") or ""),
 				InitCommand=function(self)
 					self:horizalign(center)
-					self:maxwidth(130)
-					self:x(-paneWidth2Player/2 + 100)
+					self:zoom(TextZoom):maxwidth(NameMaxWidth)
+					self:x(NameX)
 					self:diffuse(Color.White)
 				end,
 				ResetEntryMessageCommand=function(self)
@@ -711,7 +713,7 @@ for player in ivalues( PlayerNumber ) do
 				Name="Score",
 				Text="",
 				InitCommand=function(self)
-					self:horizalign(right)
+					self:horizalign(right):zoom(TextZoom)
 					self:x(paneWidth2Player/2-borderWidth)
 					self:diffuse(Color.White)
 				end,
@@ -724,7 +726,7 @@ for player in ivalues( PlayerNumber ) do
 				Name="Date",
 				Text="",
 				InitCommand=function(self)
-					self:horizalign(right)
+					self:horizalign(right):zoom(TextZoom)
 					self:x(paneWidth2Player/2 + 100 - borderWidth)
 					self:diffuse(Color.White)
 				end,

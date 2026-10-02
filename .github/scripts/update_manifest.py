@@ -2,8 +2,12 @@
 (Scripts/SL-Helpers-ThemeUpdate.lua).
 
 manifest.json lists every file the theme ships (files in the commit, leaving out
-dotfiles and .github/) with its SHA-256 and size. version.json only names the commit, so
-the startup check stays small.
+dotfiles and .github/) with its SHA-256 and size. version.json only names the commit and
+its version, so the startup check stays small.
+
+The version is ThemeInfo.ini's major.minor and the number of commits, e.g. 1.0.42, so
+every published commit gets a new one without anyone editing ThemeInfo.ini (bump its
+major or minor there for a bigger release). Needs the full history (fetch-depth: 0).
 
 Usage: python3 .github/scripts/update_manifest.py <output dir>
 """
@@ -18,10 +22,25 @@ def git(*args):
     return subprocess.check_output(["git", *args]).decode("utf-8").strip()
 
 
+def theme_version():
+    base = "1.0"
+    try:
+        info = git("show", "HEAD:ThemeInfo.ini")
+    except subprocess.CalledProcessError:
+        info = ""
+    for line in info.splitlines():
+        key, _, value = line.partition("=")
+        parts = value.strip().split(".")
+        if key.strip().lower() == "version" and len(parts) >= 2 and parts[0].isdigit() and parts[1].isdigit():
+            base = f"{int(parts[0])}.{int(parts[1])}"
+    return f"{base}.{git('rev-list', '--count', 'HEAD')}"
+
+
 def main(out):
     os.makedirs(out, exist_ok=True)
     version = {
         "commit": git("rev-parse", "HEAD"),
+        "version": theme_version(),
         "date": git("show", "-s", "--format=%cI", "HEAD"),
         "message": git("show", "-s", "--format=%s", "HEAD"),
     }
@@ -53,7 +72,7 @@ def main(out):
         json.dump(version, fh, indent=1)
     with open(os.path.join(out, "manifest.json"), "w") as fh:
         json.dump({**version, "files": files}, fh, separators=(",", ":"), sort_keys=True)
-    print(f"{len(files)} files for {version['commit']}")
+    print(f"{len(files)} files for {version['commit']} (v{version['version']})")
 
 
 if __name__ == "__main__":

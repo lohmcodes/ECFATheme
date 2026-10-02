@@ -121,6 +121,11 @@ end
 -- this allows players to more easily identify what version of the theme they are currently using
 
 GetThemeVersion = function()
+	-- The version of the build that's installed, once the theme updater knows it
+	-- (Scripts/SL-Helpers-ThemeUpdate.lua). ThemeInfo.ini only has the base version.
+	local installed = InstalledThemeVersion and InstalledThemeVersion()
+	if installed then return installed end
+
 	local file = IniFile.ReadFile( THEME:GetCurrentThemeDirectory() .. "ThemeInfo.ini" )
 	if file then
 		if file.ThemeInfo and file.ThemeInfo.Version then

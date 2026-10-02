@@ -20,6 +20,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The whole history, since the version counts commits.
+          fetch-depth: 0
 
       - name: Build version.json and manifest.json
         run: python3 .github/scripts/update_manifest.py "$RUNNER_TEMP/manifest"

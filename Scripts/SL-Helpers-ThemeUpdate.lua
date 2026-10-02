@@ -10,18 +10,19 @@
 -- Save/ECFAThemeUpdate/, copies them into the theme once every download has
 -- succeeded, and reloads the theme.
 --
+-- All of it comes through ECFA Cloud (/api/v1/theme/), which passes on what's on
+-- GitHub, so the cab doesn't need GitHub in its HttpAllowHosts.
+--
 -- ITGmania can't delete files from Lua, so files removed from the theme stay
 -- behind. Removed Scripts/ and Modules/ files, which would otherwise still run,
 -- are emptied instead.
---
--- Needs raw.githubusercontent.com in HttpAllowHosts (e.g. *.githubusercontent.com).
 
-local Repo = "lohmcodes/ECFATheme"
-local RawURL = "https://raw.githubusercontent.com/"..Repo.."/"
-local ManifestBranch = "update-manifest"
+local UpdateURL = function(path)
+	return GetECFACloudURL().."/api/v1/theme/"..path
+end
 
-ThemeUpdateVersionURL = RawURL..ManifestBranch.."/version.json"
-ThemeUpdateManifestURL = RawURL..ManifestBranch.."/manifest.json"
+ThemeUpdateVersionURL = function() return UpdateURL("version") end
+ThemeUpdateManifestURL = function() return UpdateURL("manifest") end
 -- Downloads wait here until all of them have arrived.
 ThemeUpdateStagingDir = "/Save/ECFAThemeUpdate/"
 
@@ -30,7 +31,7 @@ local InstalledVersionFile = "Other/installed-version.txt"
 local InstalledManifestFile = "Other/installed-manifest.json"
 
 ThemeUpdate = {
-	-- The newest version on GitHub ({commit, date, message}), once checked.
+	-- The newest version on GitHub ({commit, version, date, message}), once checked.
 	Latest = nil,
 	-- Whether Latest isn't the installed version.
 	Available = false,
@@ -81,7 +82,7 @@ EncodeThemePath = function(path)
 end
 
 ThemeFileURL = function(commit, path)
-	return RawURL..commit.."/"..EncodeThemePath(path)
+	return UpdateURL("files/"..commit.."/"..EncodeThemePath(path))
 end
 
 -- Reads manifest.json. Returns the manifest, or nil and why it was refused.
@@ -136,32 +137,64 @@ end
 -- -----------------------------------------------------------------------
 -- Installed version
 
+-- A version from version.json/manifest.json that's fit to show, like "1.0.42".
+IsValidThemeVersion = function(version)
+	return type(version) == "string" and #version <= 32 and version:match("^%d+%.%d+[%w%.%-%+]*$") ~= nil
+end
+
+-- What the updater (or the startup check) last recorded: commit, version.
+-- Either can be nil; older records have only the commit.
+local RecordedTheme = function()
+	local recorded = ReadTextFile(THEME:GetCurrentThemeDirectory()..InstalledVersionFile) or ""
+	local commit = recorded:match("^%s*(%x+)")
+	local version = recorded:match("^%s*%x+%s+(%S+)")
+	return commit, IsValidThemeVersion(version) and version or nil
+end
+
+-- The checked-out commit, for a theme folder cloned with git.
+local GitThemeCommit = function()
+	local dir = THEME:GetCurrentThemeDirectory()
+	local head = ReadTextFile(dir..".git/HEAD")
+	if not head then return nil end
+	local ref = head:match("^ref:%s*(%S+)")
+	if not ref then return head:match("^%s*(%x+)") end
+	local sha = ReadTextFile(dir..".git/"..ref)
+	sha = sha and sha:match("^%s*(%x+)")
+	if not sha then
+		for line in (ReadTextFile(dir..".git/packed-refs") or ""):gmatch("[^\r\n]+") do
+			local s, r = line:match("^(%x+)%s+(%S+)$")
+			if r == ref then sha = s end
+		end
+	end
+	return sha
+end
+
 -- The commits the installed theme could be: the one the updater last installed,
 -- and the git checkout's (for a theme folder cloned with git).
 InstalledThemeCommits = function()
-	local dir = THEME:GetCurrentThemeDirectory()
 	local commits = {}
-	local recorded = ReadTextFile(dir..InstalledVersionFile)
-	commits[#commits+1] = recorded and recorded:match("^%s*(%x+)")
-
-	local head = ReadTextFile(dir..".git/HEAD")
-	if head then
-		local ref = head:match("^ref:%s*(%S+)")
-		if not ref then
-			commits[#commits+1] = head:match("^%s*(%x+)")
-		else
-			local sha = ReadTextFile(dir..".git/"..ref)
-			sha = sha and sha:match("^%s*(%x+)")
-			if not sha then
-				for line in (ReadTextFile(dir..".git/packed-refs") or ""):gmatch("[^\r\n]+") do
-					local s, r = line:match("^(%x+)%s+(%S+)$")
-					if r == ref then sha = s end
-				end
-			end
-			commits[#commits+1] = sha
-		end
-	end
+	commits[#commits+1] = (RecordedTheme())
+	commits[#commits+1] = GitThemeCommit()
 	return commits
+end
+
+-- The installed version (like "1.0.42"), or nil when it isn't known. The record is
+-- ignored once a git checkout has moved to another commit.
+InstalledThemeVersion = function()
+	local commit, version = RecordedTheme()
+	if not commit or not version then return nil end
+	local git = GitThemeCommit()
+	if git and git:lower() ~= commit:lower() then return nil end
+	return version
+end
+
+-- "v1.0.42 (abc1234)", or just the short commit when there's no version.
+DescribeThemeBuild = function(version, commit)
+	local short = commit and commit:sub(1, 7) or nil
+	if IsValidThemeVersion(version) then
+		return short and ("v%s (%s)"):format(version, short) or ("v"..version)
+	end
+	return short
 end
 
 IsThemeCommitInstalled = function(commit)
@@ -190,8 +223,9 @@ RecordInstalledTheme = function(manifest)
 	for path, entry in pairs(manifest.files) do
 		files[path] = { sha256=entry.sha256 }
 	end
-	return WriteTextFile(dir..InstalledVersionFile, manifest.commit.."\n")
-		and WriteTextFile(dir..InstalledManifestFile, JsonEncode({ commit=manifest.commit, files=files }))
+	local version = IsValidThemeVersion(manifest.version) and manifest.version or ""
+	return WriteTextFile(dir..InstalledVersionFile, manifest.commit.."\n"..version.."\n")
+		and WriteTextFile(dir..InstalledManifestFile, JsonEncode({ commit=manifest.commit, version=manifest.version, files=files }))
 end
 
 -- Whether the theme folder can be written, checked before downloading anything.
@@ -207,13 +241,13 @@ end
 -- the answer comes back.
 CheckForThemeUpdate = function(done)
 	if ThemeUpdate.Checking or ThemeUpdate.Checked then return end
-	if not NETWORK:IsUrlAllowed(ThemeUpdateVersionURL) then
+	if not NETWORK:IsUrlAllowed(ThemeUpdateVersionURL()) then
 		ThemeUpdate.Checked = true
 		return
 	end
 	ThemeUpdate.Checking = true
 	NETWORK:HttpRequest{
-		url=ThemeUpdateVersionURL,
+		url=ThemeUpdateVersionURL(),
 		method="GET",
 		connectTimeout=10,
 		transferTimeout=10,
@@ -225,6 +259,14 @@ CheckForThemeUpdate = function(done)
 			if not ok or type(latest) ~= "table" or type(latest.commit) ~= "string" or not latest.commit:match("^%x+$") then return end
 			ThemeUpdate.Latest = latest
 			ThemeUpdate.Available = not IsThemeCommitInstalled(latest.commit)
+			-- Already on the newest commit (e.g. after a git pull) but its version isn't
+			-- recorded yet: record it, so the title screen shows it.
+			if not ThemeUpdate.Available and IsValidThemeVersion(latest.version) and InstalledThemeVersion() ~= latest.version
+					and (GitThemeCommit() or latest.commit):lower() == latest.commit:lower() then
+				if WriteTextFile(THEME:GetCurrentThemeDirectory()..InstalledVersionFile, latest.commit.."\n"..latest.version.."\n") then
+					MESSAGEMAN:Broadcast("ThemeVersionChanged")
+				end
+			end
 			if done then done(ThemeUpdate.Available) end
 		end,
 	}

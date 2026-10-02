@@ -50,12 +50,34 @@ ExSourcesFromResponse = function(playerData)
 	}
 end
 
+-- A name's words, lowercased: "Chance R." is { "chance", "r" }.
+local NameWords = function(name)
+	local words = {}
+	for word in tostring(name or ""):lower():gmatch("%w+") do words[#words+1] = word end
+	return words
+end
+
+-- Whether two services' names are probably the same player: the same once case,
+-- spaces and punctuation are ignored ("Eternal Polaris" and "EternalPolaris"), or
+-- one is the other plus a last initial ("Chance R." and "Chance").
+SamePlayerName = function(a, b)
+	a, b = tostring(a or ""), tostring(b or "")
+	if a ~= "" and a:lower() == b:lower() then return true end
+	local wa, wb = NameWords(a), NameWords(b)
+	local ja, jb = table.concat(wa), table.concat(wb)
+	if ja == "" or jb == "" then return false end
+	if ja == jb then return true end
+	if #wa > #wb then wa, wb, ja, jb = wb, wa, jb, ja end
+	return #wb == #wa + 1 and #wb[#wb] == 1 and #ja >= 3 and table.concat(wb, "", 1, #wa) == ja
+end
+
 -- Merges the sources into one list, best EX first, each entry tagged with its
--- source. A player appears at most once per service, and the same name with the
--- same score on more than one service (one play submitted to several) is listed
--- once, under the first source in BlendedSources. When none of the player's own
--- scores make the cut, their best takes the last row (without a rank, since
--- their place in the combined list isn't known).
+-- source. A player appears at most once per service, and a score that another
+-- service already listed for the same player (see SamePlayerName; the dates may
+-- differ, since services record them differently) is listed once, under the
+-- first source in BlendedSources. When none of the player's own scores make the
+-- cut, their best takes the last row (without a rank, since their place in the
+-- combined list isn't known).
 --
 -- lists: { ECFA={entries}, GS={entries}, AC={entries} } (any may be missing)
 BlendLeaderboards = function(lists, maxRows)
@@ -73,13 +95,20 @@ BlendLeaderboards = function(lists, maxRows)
 		return BlendedSource[a.source].order < BlendedSource[b.source].order
 	end)
 
-	local rows, seen, seenScore, ownBest = {}, {}, {}, nil
+	-- listed[score] = the entries kept with that score, to spot the same score from another service
+	local rows, seen, listed, ownBest = {}, {}, {}, nil
+	local AlreadyListed = function(e)
+		for kept in ivalues(listed[e.score] or {}) do
+			if kept.source ~= e.source and SamePlayerName(kept.name, e.name) then return true end
+		end
+		return false
+	end
 	for e in ivalues(all) do
 		local id = e.source.."\n"..e.name
-		local sameScore = e.name:lower():gsub("^%s+", ""):gsub("%s+$", "").."\n"..e.score
-		if not seen[id] and not seenScore[sameScore] then
+		if not seen[id] and not AlreadyListed(e) then
 			seen[id] = true
-			seenScore[sameScore] = true
+			listed[e.score] = listed[e.score] or {}
+			table.insert(listed[e.score], e)
 			if #rows < maxRows then
 				e.rank = #rows + 1
 				rows[#rows+1] = e

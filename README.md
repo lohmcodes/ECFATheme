@@ -11,11 +11,11 @@ Clone or download this repository into ITGmania's `Themes` folder (e.g. `Themes/
 theme in ITGmania's options.
 
 ITGmania only lets themes talk to hosts listed in `HttpAllowHosts` in `Save/Preferences.ini` (a comma-separated
-list). Add ECFA Cloud, plus GitHub's file host for theme updates and GrooveStats/ArrowCloud for the blended
-leaderboard:
+list). ECFA Cloud is the only one the theme needs: scores, every leaderboard (GrooveStats and ArrowCloud EX
+included) and theme updates all go through it.
 
 ```ini
-HttpAllowHosts=<existing hosts>,*.ecfa.online,ecfa.online,*.githubusercontent.com,*.groovestats.com,*.arrowcloud.dance
+HttpAllowHosts=<existing hosts>,ecfa.online
 ```
 
 If the host is blocked, the title menu shows a message saying which host to add.
@@ -59,28 +59,17 @@ Waterfall is the only play mode.
   the screen (e.g. on a stream) can't collect the key. The operator option `QRLogin` controls when the screen
   appears.
 - **Leaderboards.** The song select scorebox (or the bottom pane, per the `MusicWheelGS` theme option), the
-  sort menu's leaderboard popup and the gameplay scorebox show the chart's ECFA Cloud Waterfall leaderboard and
-  the secondary EX (and, in the popup, ITG) leaderboards, plus the event leaderboard when the chart is part of an
-  open ECFA Cloud event.
-- **Blended leaderboard.** The popup's first page, and "Blended Scores" in the `Show Score Boxes` player option,
+  sort menu's leaderboard popup and the gameplay scorebox show EX and Waterfall (WF) boards only, each labeled
+  with which it is and where the scores come from: Blended EX (first), GrooveStats EX, ArrowCloud EX, ECFA Cloud
+  WF, and the event's WF leaderboard when the chart is part of an open ECFA Cloud event. The `Show Score Boxes`
+  player option picks which ones the scoreboxes rotate through.
+- **Blended leaderboard.** The popup's first page, and "Blended EX" in the `Show Score Boxes` player option,
   list the chart's EX scores from ECFA Cloud, GrooveStats and ArrowCloud together in one list, best first, each
-  row tagged EC, GS or AC. GrooveStats and ArrowCloud are only read from (one GET per chart); nothing is ever
-  submitted to them. ArrowCloud's leaderboards are public, so every player gets them. GrooveStats only answers
-  with the player's own key, and an ArrowCloud key additionally marks the player's own scores. Keys are read from
-  the profile folder:
-
-  ```ini
-  ; GrooveStats.ini
-  [GrooveStats]
-  ApiKey=<64-character GrooveStats API key>
-
-  ; ArrowCloud.ini
-  [ArrowCloud]
-  ApiKey=<ArrowCloud API key>
-  ```
-
-  Their hosts must be in `HttpAllowHosts` too (`*.groovestats.com,*.arrowcloud.dance`). Without a GrooveStats key,
-  GrooveStats is left out and the popup's legend dims it. The code is in `Scripts/SL-Helpers-BlendedLeaderboard.lua`.
+  row tagged EC, GS or AC. ECFA Cloud fetches the other two (`external=1` on `player-leaderboards`), so players
+  need no keys or accounts there, and nothing is ever submitted to them. A score another service already listed
+  for the same player (names compared ignoring case, spaces and punctuation, or differing by a last initial) is
+  shown once. GrooveStats scores need `GROOVESTATS_API_KEY` on the ECFA Cloud server; when a service is
+  unavailable, the popup's legend dims it. The code is in `Scripts/SL-Helpers-BlendedLeaderboard.lua`.
 
 ## Theme updates
 
@@ -89,8 +78,11 @@ file with the new version's, downloads only the ones that differ (each checked a
 once all of them have arrived, and reloads the theme. Nothing changes if a download fails or Back is pressed first.
 
 - Every push to `master` runs `.github/workflows/update-manifest.yml`, which force-pushes `version.json` and
-  `manifest.json` (every file's SHA-256) to the `update-manifest` branch. The theme reads them from
-  raw.githubusercontent.com, so `*.githubusercontent.com` must be in `HttpAllowHosts`.
+  `manifest.json` (every file's SHA-256) to the `update-manifest` branch. The theme reads them, and the files,
+  through ECFA Cloud (`/api/v1/theme/`), so no other host needs allowing.
+- Each published commit gets a version: `ThemeInfo.ini`'s major.minor and the number of commits (e.g. 1.0.42).
+  The title screen shows it once the updater has installed that commit (or, in a git clone, once the startup
+  check sees the clone is on it). Bump the major or minor in `ThemeInfo.ini` for a bigger release.
 - The installed version is `Other/installed-version.txt` (written by the updater), or the commit of a git clone.
 - ITGmania can't delete files from Lua, so files removed from the theme stay behind. Removed `Scripts/` and
   `Modules/` files are emptied so they no longer run.

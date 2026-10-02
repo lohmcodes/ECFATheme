@@ -44,7 +44,10 @@ pane[#pane+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{
 		local delta = e.rankingPointsDelta or 0
 		self:settext(table.concat({
 			("%.2f%%  ·  %s"):format(e.score / 100, e.clearType),
-			("%s + %s bonus  /  %s pts"):format(Commas(e.songPoints), Commas(e.bonusPoints), Commas(e.maxPoints)),
+			-- Clear bonuses are off in ECFA events; only mention one when an event has it.
+			(tonumber(e.bonusPoints) or 0) > 0
+				and ("%s + %s bonus  /  %s pts"):format(Commas(e.songPoints), Commas(e.bonusPoints), Commas(e.maxPoints))
+				or ("%s  /  %s pts"):format(Commas(e.songPoints), Commas(e.maxPoints)),
 			("Ranking points %s (%s%s)"):format(Commas(e.rankingPoints), delta >= 0 and "+" or "-", Commas(math.abs(delta))),
 			("Rank %s"):format(rank),
 		}, "\n"))

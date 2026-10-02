@@ -42,8 +42,6 @@ local sl_name = THEME:GetCurThemeName()
 -- so, start with a string like "StepMania 5.0.12" or "StepMania 5.1.0"
 local sm_version = ("%s %s"):format(ProductFamily(), ProductVersion())
 
--- GetThemeVersion() is defined in ./Scripts/SL-Helpers.lua and returns the SL version from ThemeInfo.ini
-local sl_version = GetThemeVersion()
 
 -- "git" appears in ProductVersion() for non-release builds of StepMania.
 -- If a non-release executable is being used, append date information about when it
@@ -70,6 +68,9 @@ local GetText = function()
 	end
 
 
+	-- GetThemeVersion() is defined in ./Scripts/SL-SupportHelpers.lua: the installed
+	-- build's version, or ThemeInfo.ini's.
+	local sl_version = GetThemeVersion()
 	local text = ("%s%s\n%s%s\n%s"):format(
 		sl_name,  (sl_version and (" v" .. sl_version) or ""),
 		sm_version, (newer_itgmania_exists and " (" .. table.concat(SL.Global.ITGmaniaLatestVersion, ".") .." Available📥)" or ""),
@@ -100,6 +101,9 @@ return LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{
 		self:diffuse(textColor):shadowlength(shadowLength)
 	end,
 	VersionCheckMessageCommand=function(self)
+		self:settext(GetText())
+	end,
+	ThemeVersionChangedMessageCommand=function(self)
 		self:settext(GetText())
 	end,
 	VisualStyleSelectedMessageCommand=function(self)

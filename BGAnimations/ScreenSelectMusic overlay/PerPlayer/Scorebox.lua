@@ -21,16 +21,23 @@ if not IsServiceAllowed(SL.ECFACloud.GetScores) or SL[pn].ApiKey == "" then retu
 
 local n = player==PLAYER_1 and "1" or "2"
 local IsNotWide = (GetScreenAspectRatio() < 16/9)
-local NumEntries = 7
+local NumEntries = 10
 
 local border = 5
 local width = 162
--- Seven rows in a box a little taller than the old five-row one, raised by half
--- the growth so its bottom edge stays where it was (clear of the footer).
-local height = 94
+-- Ten rows in a box taller than the old five-row one, raised by half the growth
+-- so its bottom edge stays where it was (clear of the footer).
+local height = 110
 local yShift = -(height - 80) / 2
 local row_spacing = height / NumEntries
-local text_zoom = 0.75
+local text_zoom = 0.6
+-- How wide a name may get on screen (maxwidth is measured before the zoom): up
+-- to the score, or up to the source tag on the blended board.
+local NameRoom = function(blended)
+	local narrow = IsNotWide and #GAMESTATE:GetHumanPlayers() > 1
+	if narrow then return (blended and 44 or 60) / text_zoom end
+	return (blended and 80 or 95) / text_zoom
+end
 
 local BOARDS = {
 	[0] = { option="SBBlended",     kind="EX", label="Blended",     color=color("#c0c0c0"), external=true },
@@ -359,6 +366,10 @@ local af = Def.ActorFrame{
 			ResetAllData()
 
 			local parent = self:GetParent()
+			-- Every chart starts on the first board (Blended EX when it's on), including
+			-- another difficulty of the same song, instead of carrying on the rotation.
+			parent:stoptweening()
+			parent.isFirst = true
 			parent:visible(true)
 			for i=1,NumEntries do
 				parent:GetChild("Name"..i):settext(""):visible(false)
@@ -532,7 +543,7 @@ for i=1,NumEntries do
 			Name="Rank"..i,
 			Texture=THEME:GetPathG("", "crown.png"),
 			InitCommand=function(self)
-				self:zoom(0.078):xy(-width/2 + 14, y):diffusealpha(0)
+				self:zoom(0.064):xy(-width/2 + 14, y):diffusealpha(0)
 				if IsNotWide and #GAMESTATE:GetHumanPlayers() > 1 then
 					self:x(-width/2 + 32)
 				end
@@ -566,7 +577,7 @@ for i=1,NumEntries do
 			Name="Rank"..i,
 			Text="",
 			InitCommand=function(self)
-				self:diffuse(Color.White):xy(-width/2 + 27, y):maxwidth(36):horizalign(right):zoom(text_zoom)
+				self:diffuse(Color.White):xy(-width/2 + 27, y):maxwidth(22 / text_zoom):horizalign(right):zoom(text_zoom)
 				if IsNotWide and #GAMESTATE:GetHumanPlayers() > 1 then
 					self:x(-width/2 + 42)
 				end
@@ -598,9 +609,9 @@ for i=1,NumEntries do
 		Name="Name"..i,
 		Text="",
 		InitCommand=function(self)
-			self:diffuse(Color.White):xy(-width/2 + 30, y):maxwidth(118):horizalign(left):zoom(text_zoom)
+			self:diffuse(Color.White):xy(-width/2 + 30, y):maxwidth(NameRoom(false)):horizalign(left):zoom(text_zoom)
 			if IsNotWide and #GAMESTATE:GetHumanPlayers() > 1 then
-				self:x(-width/2 + 45):maxwidth(74)
+				self:x(-width/2 + 45)
 			end
 		end,
 		PlayerJoinedMessageCommand=function(self,params)
@@ -619,8 +630,7 @@ for i=1,NumEntries do
 		SetScoreboxCommand=function(self)
 			local score = all_data[cur_style+1]["scores"][i]
 			-- Narrower on the blended board, to make room for the source tag.
-			local narrow = IsNotWide and #GAMESTATE:GetHumanPlayers() > 1
-			self:maxwidth((narrow and 74 or 118) - (cur_style == 0 and (narrow and 24 or 22) or 0))
+			self:maxwidth(NameRoom(cur_style == 0))
 			self:settext(score.name)
 			self:linear(anim_seconds/2):diffusealpha(1):diffuse(RowColor(score))
 		end,

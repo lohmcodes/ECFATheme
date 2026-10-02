@@ -91,8 +91,8 @@ local af = Def.ActorFrame{
 	end,
 	OnCommand=function(self)
 		SCREENMAN:GetTopScreen():AddInputCallback(InputHandler)
-		if not NETWORK:IsUrlAllowed(ThemeUpdateManifestURL) then
-			Fail(s("Blocked"))
+		if not NETWORK:IsUrlAllowed(ThemeUpdateManifestURL()) then
+			Fail(s("Blocked"):format(GetECFACloudHost()))
 			return
 		end
 		self:playcommand("Refresh")
@@ -104,7 +104,7 @@ local af = Def.ActorFrame{
 
 	FetchCommand=function(self)
 		state.requests.manifest = NETWORK:HttpRequest{
-			url=ThemeUpdateManifestURL,
+			url=ThemeUpdateManifestURL(),
 			method="GET",
 			connectTimeout=15,
 			transferTimeout=60,
@@ -233,8 +233,9 @@ af[#af+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Bold")..{
 af[#af+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{
 	InitCommand=function(self) self:y(-55):zoom(0.8):diffuse(color("#bbbbbb")):maxwidth(_screen.w * 0.8 / 0.8) end,
 	RefreshCommand=function(self)
-		local latest = (state.manifest and state.manifest.commit) or (ThemeUpdate.Latest and ThemeUpdate.Latest.commit)
-		self:settext(s("Versions"):format(ShortInstalledThemeCommit() or s("Unknown"), latest and latest:sub(1, 7) or "..."))
+		local latest = state.manifest or ThemeUpdate.Latest
+		local installed = DescribeThemeBuild(InstalledThemeVersion(), ShortInstalledThemeCommit())
+		self:settext(s("Versions"):format(installed or s("Unknown"), latest and DescribeThemeBuild(latest.version, latest.commit) or "..."))
 	end,
 }
 af[#af+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{
