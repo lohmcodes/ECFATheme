@@ -159,6 +159,14 @@ local LeaderboardRequestProcessor = function(res, master)
 	local playerStr = "player"..n
 	local data = JsonDecode(res.body)
 
+	-- ECFA Cloud refused this player, e.g. their API key was revoked or their account deleted.
+	if data and data[playerStr] and data[playerStr]["error"] then
+		local text = data[playerStr]["error"] == "invalid-api-key" and "Invalid API key" or "Failed to Load 😞"
+		SetScoreData(1, 1, "", text, "", false, false, false, false)
+		master:queuecommand("CheckScorebox")
+		return
+	end
+
 	if data and data[playerStr] then
 		local showITG = SL[pn].ActiveModifiers.SBITGScore
 		local showEX = SL[pn].ActiveModifiers.SBExScore

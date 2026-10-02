@@ -176,6 +176,15 @@ local LeaderboardRequestProcessor = function(res, args)
 	local playerStr = "player"..n
 	local data = JsonDecode(res.body)
 
+	-- ECFA Cloud refused this player, e.g. their API key was revoked or their account deleted.
+	if data and data[playerStr] and data[playerStr]["error"] then
+		local text = data[playerStr]["error"] == "invalid-api-key" and "Invalid API key" or "Failed to Load 😞"
+		SetScoreData(1, 1, "", text, "", false, false, false, false)
+		AppendStyle(0)
+		master:queuecommand("CheckScorebox")
+		return
+	end
+
 	if data and data[playerStr] then
 		if SL[pn].Streams.Hash ~= data[playerStr]["chartHash"] then return end
 		currentHash = SL[pn].Streams.Hash
