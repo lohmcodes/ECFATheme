@@ -584,7 +584,7 @@ local Overrides = {
 	-------------------------------------------------------------------------
 	ScoreBoxOptions = {
 		SelectType = "SelectMultiple",
-		Values = { "SBITGScore", "SBBlended", "SBExScore", "SBEvents" },
+		Values = { "SBBlended", "SBGrooveStats", "SBArrowCloud", "SBITGScore", "SBEvents" },
 	},
 	-------------------------------------------------------------------------
 	StepStatsExtra = {

@@ -1,3 +1,13 @@
+-- Leaderboards in a small box next to the notefield during gameplay.
+--
+-- The same boards as the song wheel's box (switched on or off in the Show Score
+-- Boxes player option), each saying which it is (EX or WF, and the source):
+--   0  Blended EX: ECFA Cloud, GrooveStats and ArrowCloud EX scores in one list
+--   1  GrooveStats EX
+--   2  ArrowCloud EX
+--   3  ECFA Cloud WF (Waterfall)
+--   4  the event leaderboard (WF), when the chart is in an open ECFA Cloud event
+-- ECFA Cloud fetches the GrooveStats and ArrowCloud boards (SL-Helpers-BlendedLeaderboard.lua).
 local player = ...
 local pn = ToEnumShortString(player)
 
@@ -19,29 +29,19 @@ local width = 162
 local height = 80
 local row_spacing = height / NumEntries
 
-local cur_style = 0
-local num_styles = 4
-
-local ECFACloudPink = color("#b8327a")
-local ECFACloudCyan = color("#2b8fb3")
-local EventGold = color("#c9a227")
-local BlendedSilver = color("#c0c0c0")
-
--- Styles 0 and 1 are the ECFA Cloud ITG and EX leaderboards (EX first when the
--- player uses EX scoring); style 2 is the event leaderboard, when the chart is
--- in an open ECFA Cloud event; style 3 is the blended board (ECFA Cloud,
--- GrooveStats and ArrowCloud EX scores in one list; the other two are only read
--- from, see SL-Helpers-BlendedLeaderboard.lua).
-local style_color = {
-	[0] = ECFACloudPink,
-	[1] = ECFACloudCyan,
-	[2] = EventGold,
-	[3] = BlendedSilver,
+local BOARDS = {
+	[0] = { option="SBBlended",     kind="EX", label="Blended",     color=color("#c0c0c0"), external=true },
+	[1] = { option="SBGrooveStats", kind="EX", label="GrooveStats", color=color("#f2a33a"), external=true },
+	[2] = { option="SBArrowCloud",  kind="EX", label="ArrowCloud",  color=color("#56b4ef"), external=true },
+	[3] = { option="SBITGScore",    kind="WF", label="ECFA Cloud",  color=color("#b8327a") },
+	[4] = { option="SBEvents",      kind="WF", label="",            color=color("#c9a227") }, -- labeled with the event's name
 }
-if SL[pn].ActiveModifiers.ShowExScore then
-	style_color[0], style_color[1] = ECFACloudCyan, ECFACloudPink
-end
-local event_name = ""
+local num_styles = 5
+local cur_style = 0
+
+-- Boards with data, in rotation order.
+local styleOrder = {}
+local styleOrderSet = {}
 
 local self_color = color("#a1ff94")
 local rival_color = color("#c29cff")
@@ -52,16 +52,7 @@ local anim_seconds = transition_seconds
 
 local all_data = {}
 
--- The blended board waits for ECFA Cloud and the other services to all answer.
-local blend = { lists={}, ecfaDone=false, extDone=false, wanted=false, handle=nil }
--- Whether the box is rotating through boards (so a late board doesn't start a second rotation).
-local looping = false
-
 local ResetAllData = function()
-	blend.lists = {}
-	blend.ecfaDone = false
-	blend.extDone = false
-
 	SL[pn].Rival = {}
 	SL[pn].Rival.Score = 0
 	SL[pn].Rival.ExScore = 0
@@ -69,106 +60,93 @@ local ResetAllData = function()
 	SL[pn].Rival.WRExScore = 0
 
 	all_data = {}
+	styleOrder = {}
+	styleOrderSet = {}
 	for i=1,num_styles do
-		local data = {
-			["has_data"]=false,
-			["scores"]={}
-		}
-		local scores = data["scores"]
-		for i=1,NumEntries do
-			scores[#scores+1] = {
-				["rank"]="",
-				["name"]="",
-				["score"]="",
-				["isSelf"]=false,
-				["isRival"]=false,
-				["isFail"]=false,
-				["isEx"]=false,
-				["source"]=nil,
-			}
+		local data = { has_data=false, scores={} }
+		for j=1,NumEntries do
+			data.scores[j] = { rank="", name="", score="", isSelf=false, isRival=false, isFail=false, source=nil }
 		end
-		all_data[#all_data + 1] = data
+		all_data[i] = data
 	end
 end
 -- Initialize the all_data object.
 ResetAllData()
 
--- Checks to see if any data is available.
-local HasData = function(idx)
-	return all_data[idx+1] and all_data[idx+1].has_data
+-- Whether the player wants a board in the rotation.
+local Wanted = function(s)
+	return SL[pn].ActiveModifiers[BOARDS[s].option] and true or false
 end
 
--- source: the BlendedSource key of a row on the blended board, else nil.
-local SetScoreData = function(data_idx, score_idx, rank, name, score, isSelf, isRival, isFail, isEx, source)
-	if score_idx > NumEntries then return end
-	all_data[data_idx].has_data = true
-
-	local score_data = all_data[data_idx]["scores"][score_idx]
-	score_data.rank = rank..((#rank > 0) and "." or "")
-	score_data.name = name
-	score_data.score = score
-	score_data.isSelf = isSelf
-	score_data.isRival = isRival
-	score_data.isFail = isFail
-	score_data.isEx = isEx
-	score_data.source = source
-
-	-- Remember the best rival/self score and the top score of the ITG and EX
-	-- boards for the rival pace in SubtractiveScoring (ECFA Cloud boards only).
-	if data_idx >= 3 or tonumber(score) == nil then return end
-	local value = tonumber(score)
-	if not isFail and (isRival or isSelf) then
-		if isEx then
-			SL[pn].Rival.ExScore = math.max(SL[pn].Rival.ExScore, value)
-		else
-			SL[pn].Rival.Score = math.max(SL[pn].Rival.Score, value)
-		end
+-- Whether to ask ECFA Cloud for the GrooveStats and ArrowCloud boards too.
+local WantsExternal = function()
+	for s=0,num_styles-1 do
+		if BOARDS[s].external and Wanted(s) then return true end
 	end
-	if rank == "1" then
-		if isEx then
-			SL[pn].Rival.WRExScore = math.max(SL[pn].Rival.WRExScore, value)
-		else
-			SL[pn].Rival.WRScore = math.max(SL[pn].Rival.WRScore, value)
+	return false
+end
+
+-- The best rival/own score and the #1 score on ECFA Cloud's WF and EX boards, for
+-- the rival pace in SubtractiveScoring (whether or not those boards are shown).
+local TrackRivals = function(board, isEx)
+	for e in ivalues(board or {}) do
+		local value = tonumber(e["score"]) and tonumber(e["score"]) / 100
+		if value then
+			if not e["isFail"] and (e["isRival"] or e["isSelf"]) then
+				if isEx then
+					SL[pn].Rival.ExScore = math.max(SL[pn].Rival.ExScore, value)
+				else
+					SL[pn].Rival.Score = math.max(SL[pn].Rival.Score, value)
+				end
+			end
+			if tonumber(e["rank"]) == 1 then
+				if isEx then
+					SL[pn].Rival.WRExScore = math.max(SL[pn].Rival.WRExScore, value)
+				else
+					SL[pn].Rival.WRScore = math.max(SL[pn].Rival.WRScore, value)
+				end
+			end
 		end
 	end
 end
 
--- Fills one board from an ECFA Cloud leaderboard (a list of entries).
-local FillBoard = function(data_idx, entries, isEx)
-	SetScoreData(data_idx, 1, "", "No Scores", "", false, false, false, isEx)
+-- Fills a board and adds it to the rotation. rows: entries as from
+-- LeaderboardEntries/BlendLeaderboards; emptyText: shown when there are none.
+local FillBoard = function(s, rows, emptyText)
+	local data = all_data[s+1]
+	data.has_data = true
+	data.scores[1].name = emptyText or "No Scores"
 	local count = 0
-	local added = {}
-	for entry in ivalues(entries) do
+	local seen = {}
+	for e in ivalues(rows or {}) do
 		if count >= NumEntries then break end
-		if not added[entry["name"]] then
-			added[entry["name"]] = true
+		-- One row per player on a single-source board (the blended board does its own merging).
+		local id = (e.source or "").."\n"..e.name
+		if not seen[id] then
+			seen[id] = true
 			count = count + 1
-			SetScoreData(data_idx, count,
-							tostring(entry["rank"]),
-							entry["name"],
-							string.format("%.2f", entry["score"]/100),
-							entry["isSelf"],
-							entry["isRival"],
-							entry["isFail"],
-							isEx
-						)
+			local row = data.scores[count]
+			row.rank = e.rank and (tostring(e.rank)..".") or ""
+			row.name = e.name
+			row.score = string.format("%.2f", e.score/100)
+			row.isSelf = e.isSelf
+			row.isRival = e.isRival
+			row.isFail = e.isFail
+			row.source = e.source
 		end
 	end
+	if styleOrderSet[s] then return end
+	styleOrderSet[s] = true
+	styleOrder[#styleOrder+1] = s
+	table.sort(styleOrder)
 end
 
--- Fills the blended board (style 3) once ECFA Cloud and the other services have
--- all answered. kick: start the rotation if it isn't running (the ECFA Cloud
--- response handler does that itself).
-local UpdateBlended = function(master, kick)
-	if not blend.wanted or not blend.ecfaDone or not blend.extDone then return end
-	SetScoreData(4, 1, "", "No Scores", "", false, false, false, true)
-	for i, e in ipairs(BlendLeaderboards(blend.lists, NumEntries)) do
-		SetScoreData(4, i, e.rank and tostring(e.rank) or "", e.name, string.format("%.2f", e.score/100),
-			e.isSelf, e.isRival, e.isFail, true, e.source)
+-- The first board the player has switched on, for showing an error.
+local FirstWantedStyle = function()
+	for s=0,num_styles-1 do
+		if Wanted(s) then return s end
 	end
-	if kick and not looping then
-		master:queuecommand("CheckScorebox")
-	end
+	return 3
 end
 
 local LeaderboardRequestProcessor = function(res, master)
@@ -176,59 +154,45 @@ local LeaderboardRequestProcessor = function(res, master)
 
 	if res.error or res.statusCode ~= 200 then
 		local error = res.error and ToEnumShortString(res.error) or nil
-		local text = ""
-		if error == "Timeout" then
-			text = "Timed Out"
-		elseif error or (res.statusCode ~= nil and res.statusCode ~= 200) then
-			text = "Failed to Load 😞"
-		end
-		SetScoreData(1, 1, "", text, "", false, false, false, false)
-		blend.ecfaDone = true
-		UpdateBlended(master, false)
+		FillBoard(FirstWantedStyle(), {}, error == "Timeout" and "Timed Out" or "Failed to Load 😞")
 		master:queuecommand("CheckScorebox")
 		return
 	end
 
 	local playerStr = "player"..n
 	local data = JsonDecode(res.body)
+	local d = data and data[playerStr]
 
 	-- ECFA Cloud refused this player, e.g. their API key was revoked or their account deleted.
-	if data and data[playerStr] and data[playerStr]["error"] then
-		local text = data[playerStr]["error"] == "invalid-api-key" and "Invalid API key" or "Failed to Load 😞"
-		SetScoreData(1, 1, "", text, "", false, false, false, false)
-		blend.ecfaDone = true
-		UpdateBlended(master, false)
+	if d and d["error"] then
+		FillBoard(FirstWantedStyle(), {}, d["error"] == "invalid-api-key" and "Invalid API key" or "Failed to Load 😞")
 		master:queuecommand("CheckScorebox")
 		return
 	end
 
-	if data and data[playerStr] then
-		local showITG = SL[pn].ActiveModifiers.SBITGScore
-		local showEX = SL[pn].ActiveModifiers.SBExScore
-		local showEvents = SL[pn].ActiveModifiers.SBEvents
-		local exFirst = SL[pn].ActiveModifiers.ShowExScore
-		local itgIdx = exFirst and 2 or 1
-		local exIdx = exFirst and 1 or 2
+	if d then
+		TrackRivals(d["wfLeaderboard"], false)
+		TrackRivals(d["exLeaderboard"], true)
 
-		if showITG and data[playerStr]["wfLeaderboard"] then
-			FillBoard(itgIdx, data[playerStr]["wfLeaderboard"], false)
+		if Wanted(0) then FillBoard(0, BlendLeaderboards(ExSourcesFromResponse(d), NumEntries)) end
+		-- A missing GrooveStats/ArrowCloud board means ECFA Cloud couldn't get it.
+		if Wanted(1) then
+			local gs = LeaderboardEntries(d["gsExLeaderboard"])
+			FillBoard(1, gs or {}, gs and "No Scores" or "Unavailable")
 		end
-		if showEX and data[playerStr]["exLeaderboard"] then
-			FillBoard(exIdx, data[playerStr]["exLeaderboard"], true)
+		if Wanted(2) then
+			local ac = LeaderboardEntries(d["acExLeaderboard"])
+			FillBoard(2, ac or {}, ac and "No Scores" or "Unavailable")
 		end
+		if Wanted(3) then FillBoard(3, LeaderboardEntries(d["wfLeaderboard"])) end
 
 		-- The first open event that includes this chart.
-		local ev = data[playerStr]["events"] and data[playerStr]["events"][1]
-		if showEvents and ev and ev["leaderboard"] then
-			event_name = ev["name"] or ""
-			FillBoard(3, ev["leaderboard"], false)
-			master:playcommand("SetEventName")
+		local ev = d["events"] and d["events"][1]
+		if Wanted(4) and ev and ev["leaderboard"] then
+			BOARDS[4].label = ev["name"] or ""
+			FillBoard(4, LeaderboardEntries(ev["leaderboard"]))
 		end
-
-		blend.lists.ECFA = BlendedEntriesFromECFACloud(data[playerStr]["exLeaderboard"])
 	end
-	blend.ecfaDone = true
-	UpdateBlended(master, false)
 	master:queuecommand("CheckScorebox")
 end
 
@@ -249,48 +213,30 @@ local af = Def.ActorFrame{
 		else
 			self:xy(GetNotefieldWidth() - 140, -115)
 		end
-		
+
 		self.isFirst = true
-	end,
-	OffCommand=function(self)
-		if blend.handle then
-			blend.handle:Cancel()
-			blend.handle = nil
-		end
 	end,
 	CheckScoreboxCommand=function(self)
 		self:queuecommand("LoopScorebox")
 	end,
 	LoopScoreboxCommand=function(self)
-		if #all_data == 0 then return end
+		if #styleOrder == 0 then return end
+
+		self:finishtweening()
 
 		-- On first display, use zero animation time so content appears instantly.
 		anim_seconds = self.isFirst and 0 or transition_seconds
 
-		local start = cur_style
-
-		cur_style = (cur_style + 1) % num_styles
-		if cur_style ~= start or self.isFirst then
-			-- Make sure we have the next set of data.
-			while cur_style ~= start do
-				if HasData(cur_style) then
-					-- If this is the first time we're looping, update the start variable
-					-- since it may be different than the default
-					if self.isFirst then
-						start = cur_style
-						self.isFirst = false
-						-- Continue looping to figure out the next style.
-					else
-						break
-					end
-				end
-				cur_style = (cur_style + 1) % num_styles
-			end
+		-- Always start on the first board (Blended EX when it's on).
+		if self.isFirst then
+			self.isFirst = false
+			self.orderPos = 1
+		else
+			self.orderPos = (self.orderPos % #styleOrder) + 1
 		end
+		cur_style = styleOrder[self.orderPos]
 
-		-- Loop only if there's something new to loop to.
-		looping = (start ~= cur_style)
-		if looping then
+		if #styleOrder > 1 then
 			self:sleep(loop_seconds):queuecommand("LoopScorebox")
 		end
 	end,
@@ -302,6 +248,7 @@ local af = Def.ActorFrame{
 		CurrentSongChangedMessageCommand=function(self)
 			if not self.isFirst then
 				ResetAllData()
+				self:GetParent().isFirst = true
 				self:queuecommand("MakeRequest")
 			end
 		end,
@@ -312,6 +259,7 @@ local af = Def.ActorFrame{
 				maxLeaderboardResults=NumEntries,
 			}
 			query["chartHashP"..n] = SL[pn].Streams.Hash
+			if WantsExternal() then query["external"] = 1 end
 			local headers = {}
 			headers["x-api-key-player-"..n] = SL[pn].ApiKey
 
@@ -334,25 +282,6 @@ local af = Def.ActorFrame{
 				end
 			end
 
-			-- GrooveStats/ArrowCloud for the blended board, alongside the ECFA Cloud request.
-			if blend.handle then
-				blend.handle:Cancel()
-				blend.handle = nil
-			end
-			blend.wanted = SL[pn].ActiveModifiers.SBBlended and HasBlendedLeaderboardSources(player)
-			if blend.wanted then
-				local hash = SL[pn].Streams.Hash
-				local master = self:GetParent()
-				blend.handle = FetchBlendedSources(player, hash, NumEntries, function(results)
-					if hash ~= SL[pn].Streams.Hash then return end
-					blend.handle = nil
-					blend.lists.GS = results.GS and results.GS.entries
-					blend.lists.AC = results.AC and results.AC.entries
-					blend.extDone = true
-					UpdateBlended(master, true)
-				end)
-			end
-
 			-- We technically will send two requests in ultrawide versus mode since
 			-- both players will have their own individual scoreboxes.
 			-- Should be fine though.
@@ -367,14 +296,14 @@ local af = Def.ActorFrame{
 		end
 	},
 
-	-- Outline
+	-- Outline, in the board's color
 	Def.Quad{
 		Name="Outline",
 		InitCommand=function(self)
-			self:diffuse(style_color[0]):setsize(width + border, height + border)
+			self:diffuse(BOARDS[0].color):setsize(width + border, height + border)
 		end,
 		LoopScoreboxCommand=function(self)
-			self:linear(anim_seconds):diffuse(style_color[cur_style])
+			self:linear(anim_seconds):diffuse(BOARDS[cur_style].color)
 		end
 	},
 	-- Main body
@@ -384,54 +313,43 @@ local af = Def.ActorFrame{
 			self:diffuse(color("#000000")):setsize(width, height)
 		end,
 	},
-	-- ECFA Cloud Logo
-	Def.Sprite{
-		Texture=THEME:GetPathG("", "ECFA logo small.png"),
-		Name="ECFACloudLogo",
-		InitCommand=function(self)
-			self:zoom(110 / self:GetWidth()):diffusealpha(0.5)
-		end,
-		LoopScoreboxCommand=function(self)
-			if cur_style == 0 or cur_style == 1 then
-				self:sleep(anim_seconds/2):linear(anim_seconds/2):diffusealpha(0.5)
-			else
-				self:linear(anim_seconds/2):diffusealpha(0.15)
-			end
-		end
-	},
-	-- EX Text
+	-- Which board this is, behind the rows: "EX" or "WF" ...
 	Def.BitmapText{
+		Name="Kind",
 		Font=ThemePrefs.Get("ThemeFont") .. " Normal",
-		Text="EX",
-		InitCommand=function(self)
-			self:diffusealpha(0):x(2):y(-5)
-			if SL[pn].ActiveModifiers.ShowExScore then self:diffusealpha(0.3) end
-		end,
-		LoopScoreboxCommand=function(self)
-			if (cur_style == 1 and not SL[pn].ActiveModifiers.ShowExScore) or (cur_style == 0 and SL[pn].ActiveModifiers.ShowExScore) or cur_style == 3 then
-				self:sleep(anim_seconds/2):linear(anim_seconds/2):diffusealpha(0.3)
-			else
-				self:linear(anim_seconds/2):diffusealpha(0)
-			end
-		end
-	},
-	-- Event name, shown under the event leaderboard
-	LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{
-		Name="EventName",
 		Text="",
 		InitCommand=function(self)
-			self:zoom(0.6):y(height/2 - 6):maxwidth((width - 10) / 0.6):diffuse(EventGold):diffusealpha(0)
+			self:zoom(1.6):y(-8):diffusealpha(0)
 		end,
-		SetEventNameCommand=function(self) self:settext(event_name) end,
 		LoopScoreboxCommand=function(self)
-			if cur_style == 2 then
-				self:sleep(anim_seconds/2):linear(anim_seconds/2):diffusealpha(0.8)
-			else
-				self:linear(anim_seconds/2):diffusealpha(0)
-			end
+			self:linear(anim_seconds/2):diffusealpha(0):queuecommand("SetScorebox")
+		end,
+		SetScoreboxCommand=function(self)
+			self:settext(BOARDS[cur_style].kind):diffuse(BOARDS[cur_style].color):linear(anim_seconds/2):diffusealpha(0.22)
+		end
+	},
+	-- ... and where the scores come from.
+	LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{
+		Name="SourceLabel",
+		Text="",
+		InitCommand=function(self)
+			self:zoom(0.6):y(14):maxwidth((width - 16) / 0.6):diffusealpha(0)
+		end,
+		LoopScoreboxCommand=function(self)
+			self:linear(anim_seconds/2):diffusealpha(0):queuecommand("SetScorebox")
+		end,
+		SetScoreboxCommand=function(self)
+			self:settext(BOARDS[cur_style].label:upper()):diffuse(BOARDS[cur_style].color):linear(anim_seconds/2):diffusealpha(0.45)
 		end
 	},
 }
+
+-- Row text color: you, a rival, or anyone else.
+local RowColor = function(score)
+	if score.isSelf then return self_color end
+	if score.isRival then return rival_color end
+	return Color.White
+end
 
 for i=1,NumEntries do
 	local y = -height/2 + row_spacing * i - row_spacing/2
@@ -450,7 +368,7 @@ for i=1,NumEntries do
 			end,
 			SetScoreboxCommand=function(self)
 				local score = all_data[cur_style+1]["scores"][i]
-				if score.rank ~= "" then
+				if score.rank == "1." then
 					self:linear(anim_seconds/2):diffusealpha(1)
 				else
 					self:diffusealpha(0)
@@ -469,14 +387,8 @@ for i=1,NumEntries do
 			end,
 			SetScoreboxCommand=function(self)
 				local score = all_data[cur_style+1]["scores"][i]
-				local clr = Color.White
-				if score.isSelf then
-					clr = self_color
-				elseif score.isRival then
-					clr = rival_color
-				end
 				self:settext(score.rank)
-				self:linear(anim_seconds/2):diffusealpha(1):diffuse(clr)
+				self:linear(anim_seconds/2):diffusealpha(1):diffuse(RowColor(score))
 			end
 		}
 	end
@@ -492,15 +404,10 @@ for i=1,NumEntries do
 		end,
 		SetScoreboxCommand=function(self)
 			local score = all_data[cur_style+1]["scores"][i]
-			local clr = Color.White
-			if score.isSelf then
-				clr = self_color
-			elseif score.isRival then
-				clr = rival_color
-			end
-			self:maxwidth(cur_style == 3 and 72 or 100)
+			-- Narrower on the blended board, to make room for the source tag.
+			self:maxwidth(cur_style == 0 and 72 or 100)
 			self:settext(score.name)
-			self:linear(anim_seconds/2):diffusealpha(1):diffuse(clr)
+			self:linear(anim_seconds/2):diffusealpha(1):diffuse(RowColor(score))
 		end
 	}
 
@@ -516,7 +423,7 @@ for i=1,NumEntries do
 		end,
 		SetScoreboxCommand=function(self)
 			local score = all_data[cur_style+1]["scores"][i]
-			local tag = cur_style == 3 and BlendedSource[score.source or ""]
+			local tag = cur_style == 0 and BlendedSource[score.source or ""]
 			self:settext(tag and tag.label or "")
 			if tag then
 				self:linear(anim_seconds/2):diffuse(tag.color)
@@ -535,15 +442,11 @@ for i=1,NumEntries do
 		end,
 		SetScoreboxCommand=function(self)
 			local score = all_data[cur_style+1]["scores"][i]
-			local clr = Color.White
+			local clr = RowColor(score)
 			if score.isFail then
 				clr = Color.Red
-			elseif score.isEx then
+			elseif BOARDS[cur_style].kind == "EX" and not (score.isSelf or score.isRival) then
 				clr = SL.JudgmentColors["FA+"][1]
-			elseif score.isSelf then
-				clr = self_color
-			elseif score.isRival then
-				clr = rival_color
 			end
 			self:settext(score.score)
 			self:linear(anim_seconds/2):diffusealpha(1):diffuse(clr)

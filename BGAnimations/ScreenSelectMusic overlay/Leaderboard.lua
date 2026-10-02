@@ -33,17 +33,18 @@ local SetLeaderboardForPlayer = function(player_num, leaderboard, leaderboardDat
 	local entryNum = 1
 	local rivalNum = 1
 
-	-- The blended board's legend: a source is dimmed while loading and faint
-	-- when it failed or the player has no key for it.
+	-- The blended board's legend; a source ECFA Cloud couldn't get is faint.
 	local blended = leaderboardData["Blended"]
 	for source in ivalues(BlendedSources) do
 		local legend = leaderboard:GetChild("Legend"..source.key)
 		legend:visible(blended and true or false)
 		if blended then
-			local status = leaderboardData["Status"][source.key]
-			legend:diffuse(source.color):diffusealpha(status == "ok" and 1 or (status == "pending" and 0.5 or 0.2))
+			legend:diffuse(source.color):diffusealpha(leaderboardData["Status"][source.key] == "ok" and 1 or 0.2)
 		end
 	end
+
+	-- Every board says whether its scores are EX or Waterfall.
+	leaderboard:GetChild("EX"):settext(leaderboardData["Kind"] or ""):visible(leaderboardData["Kind"] ~= nil)
 
 	if leaderboardData["Disabled"] then
 		if leaderboardData["Name"] then
@@ -68,9 +69,6 @@ local SetLeaderboardForPlayer = function(player_num, leaderboard, leaderboardDat
 		leaderboard:GetChild("Rival"..i):visible(false)
 	end
 	leaderboard:GetChild("Self"):visible(false)
-
-	-- Hide/Unhide EX score display
-	leaderboard:GetChild("EX"):visible(leaderboardData["IsEX"])
 
 	if leaderboardData then
 		if leaderboardData["Name"] then
@@ -143,15 +141,11 @@ local SetLeaderboardForPlayer = function(player_num, leaderboard, leaderboardDat
 	-- Empty out any remaining entries.
 	-- This also handles the error case. If success is false, then the above if block will not run.
 	-- and we will set the first entry to "Failed to Load 😞".
-	local stillLoading = false
-	for source in ivalues(blended and BlendedSources or {}) do
-		stillLoading = stillLoading or leaderboardData["Status"][source.key] == "pending"
-	end
 	for i=entryNum, NumEntries do
 		local entry = leaderboard:GetChild("LeaderboardEntry"..i)
 		-- We didn't get any scores if i is still == 1.
 		if i == 1 then
-			SetEntryText("", stillLoading and THEME:GetString("ECFACloud", "Loading") or "No Scores", "", "", entry)
+			SetEntryText("", leaderboardData["Empty"] or "No Scores", "", "", entry)
 		else
 			-- Empty out the remaining rows.
 			SetEntryText("", "", "", "", entry)
@@ -195,63 +189,6 @@ local UpdatePaneIcons = function(master, pn)
 	master:GetChild(pn.."Leaderboard"):GetChild("PaneIcons"):visible(#master[pn]["Leaderboards"] > 1)
 end
 
--- Rebuilds a player's blended board from what has arrived so far, and redraws
--- it if it's the board on screen.
-local RefreshBlended = function(master, pn)
-	local blend = master[pn] and master[pn].Blend
-	if not blend or not blend.page then return end
-	blend.page.Data = BlendLeaderboards(blend.lists, NumEntries)
-	UpdatePaneIcons(master, pn)
-	if master[pn]["Leaderboards"][master[pn]["LeaderboardIndex"]] == blend.page then
-		SetLeaderboardForPlayer(pn == "P1" and 1 or 2, master:GetChild(pn.."Leaderboard"), blend.page, master[pn].isRanked)
-	end
-end
-
--- Puts the blended board first and asks GrooveStats (with the player's key) and
--- ArrowCloud for the chart's EX leaderboard (read only).
-local StartBlended = function(master, player)
-	local pn = ToEnumShortString(player)
-	if not GAMESTATE:IsSideJoined(player) or SL[pn].Streams.Hash == "" or not HasBlendedLeaderboardSources(player) then return end
-
-	local blend = master[pn].Blend
-	blend.status = {
-		ECFA = (SL[pn].ApiKey ~= "" and IsServiceAllowed(SL.ECFACloud.Leaderboard)) and "pending" or "off",
-		GS = SL[pn].GrooveStatsApiKey ~= "" and "pending" or "off",
-		AC = "pending",
-	}
-	blend.page = {
-		Name=THEME:GetString("ECFACloud", "BlendedLeaderboard"),
-		Data={},
-		IsEX=true,
-		Blended=true,
-		Status=blend.status,
-	}
-	table.insert(master[pn]["Leaderboards"], 1, blend.page)
-	master[pn]["LeaderboardIndex"] = 1
-
-	blend.handle = FetchBlendedSources(player, SL[pn].Streams.Hash, NumEntries, function(results)
-		blend.handle = nil
-		for key in ivalues({"GS", "AC"}) do
-			if results[key] then
-				blend.lists[key] = results[key].entries
-				blend.status[key] = results[key].error and "error" or "ok"
-			end
-		end
-		RefreshBlended(master, pn)
-	end)
-	RefreshBlended(master, pn)
-end
-
-local CancelBlended = function(master)
-	for pn in ivalues({"P1", "P2"}) do
-		local blend = master[pn] and master[pn].Blend
-		if blend and blend.handle then
-			blend.handle:Cancel()
-			blend.handle = nil
-		end
-	end
-end
-
 local LeaderboardRequestProcessor = function(res, master)
 	if master == nil then return end
 
@@ -271,23 +208,16 @@ local LeaderboardRequestProcessor = function(res, master)
 			leaderboardList[#leaderboardList + 1] = {
 				Name="Machine's  Best",
 				Data=DeepCopy(localData),
-				IsEX=false
+				Kind="WF"
 			}
 			master[pn]["LeaderboardIndex"] = 1
-			local blend = master[pn].Blend
-			if blend.page then
-				-- The blended board still has the other services' scores.
-				if blend.status.ECFA == "pending" then blend.status.ECFA = "error" end
-				RefreshBlended(master, pn)
-			else
-				for j=1, NumEntries do
-					local entry = leaderboard:GetChild("LeaderboardEntry"..j)
-					if j == 1 then
-						SetEntryText("", text, "", "", entry)
-					else
-						-- Empty out the remaining rows.
-						SetEntryText("", "", "", "", entry)
-					end
+			for j=1, NumEntries do
+				local entry = leaderboard:GetChild("LeaderboardEntry"..j)
+				if j == 1 then
+					SetEntryText("", text, "", "", entry)
+				else
+					-- Empty out the remaining rows.
+					SetEntryText("", "", "", "", entry)
 				end
 			end
 		end
@@ -302,49 +232,36 @@ local LeaderboardRequestProcessor = function(res, master)
 		local leaderboard = master:GetChild(pn.."Leaderboard")
 		local leaderboardList = master[pn]["Leaderboards"]
 
-		local blend = master[pn].Blend
-		if blend.page and blend.status.ECFA == "pending" then
-			if data[playerStr] and not data[playerStr]["error"] then
-				blend.lists.ECFA = BlendedEntriesFromECFACloud(data[playerStr]["exLeaderboard"])
-				blend.status.ECFA = "ok"
-			else
-				blend.status.ECFA = "error"
-			end
-			blend.page.Data = BlendLeaderboards(blend.lists, NumEntries)
-		end
+		local d = data[playerStr]
+		if d and not d["error"] then
+			master[pn].isRanked = d["isRanked"]
 
-		if data[playerStr] then
-			master[pn].isRanked = data[playerStr]["isRanked"]
-
-			-- The Waterfall leaderboard first, then the simulated ITG and EX ones
-			-- (EX first of those if the player prefers EX).
-			local boards = {
-				{ key="wfLeaderboard", name="ECFA Cloud", isEx=false },
-				{ key="itgLeaderboard", name="ITG", isEx=false },
-				{ key="exLeaderboard", name="EX", isEx=true },
+			-- Blended EX first: ECFA Cloud's EX scores with GrooveStats' and ArrowCloud's
+			-- (which ECFA Cloud fetches), then each of those on its own, then Waterfall.
+			-- No ITG (money score) boards.
+			local sources = ExSourcesFromResponse(d)
+			leaderboardList[#leaderboardList + 1] = {
+				Name=THEME:GetString("ECFACloud", "BlendedLeaderboard"),
+				Data=BlendLeaderboards(sources, NumEntries),
+				Kind="EX",
+				Blended=true,
+				Status={ ECFA="ok", GS=sources.GS and "ok" or "error", AC=sources.AC and "ok" or "error" },
 			}
-			if SL["P"..i].ActiveModifiers.ShowExScore then
-				boards[2], boards[3] = boards[3], boards[2]
+			leaderboardList[#leaderboardList + 1] = { Name="GrooveStats", Data=sources.GS or {}, Kind="EX", Empty=(not sources.GS) and "Unavailable" or nil }
+			leaderboardList[#leaderboardList + 1] = { Name="ArrowCloud", Data=sources.AC or {}, Kind="EX", Empty=(not sources.AC) and "Unavailable" or nil }
+			if d["wfLeaderboard"] then
+				leaderboardList[#leaderboardList + 1] = { Name="ECFA Cloud", Data=DeepCopy(d["wfLeaderboard"]), Kind="WF" }
 			end
-			for board in ivalues(boards) do
-				if data[playerStr][board.key] then
-					leaderboardList[#leaderboardList + 1] = {
-						Name=board.name,
-						Data=DeepCopy(data[playerStr][board.key]),
-						IsEX=board.isEx
-					}
-					master[pn]["LeaderboardIndex"] = 1
-				end
-			end
+			master[pn]["LeaderboardIndex"] = 1
 
 			-- Then any event leaderboards.
 			-- ECFA Cloud event leaderboards are Waterfall scored.
-			for ev in ivalues(data[playerStr]["events"] or {}) do
+			for ev in ivalues(d["events"] or {}) do
 				if ev["leaderboard"] then
 					leaderboardList[#leaderboardList + 1] = {
 						Name=ev["name"],
 						Data=DeepCopy(ev["leaderboard"]),
-						IsEX=false
+						Kind="WF"
 					}
 					master[pn]["LeaderboardIndex"] = 1
 				end
@@ -355,10 +272,17 @@ local LeaderboardRequestProcessor = function(res, master)
 			leaderboardList[#leaderboardList + 1] = {
 				Name="Machine's  Best",
 				Data=DeepCopy(localData),
-				IsEX=false
+				Kind="WF"
 			}
 			master[pn]["LeaderboardIndex"] = 1
-
+		elseif d then
+			-- ECFA Cloud refused this player (e.g. a revoked key): the machine's own scores still show.
+			leaderboardList[#leaderboardList + 1] = {
+				Name="Machine's  Best",
+				Data=DeepCopy(getLocalLeaderboard(pn)),
+				Kind="WF"
+			}
+			master[pn]["LeaderboardIndex"] = 1
 		end
 		UpdatePaneIcons(master, pn)
 
@@ -375,24 +299,18 @@ local af = Def.ActorFrame{
 	InitCommand=function(self) self:visible(false) end,
 	ShowLeaderboardCommand=function(self)
 		self:visible(true)
-		CancelBlended(self)
 		for i=1, 2 do
 			local pn = "P"..i
 			self[pn] = {}
 			self[pn].isRanked = false
 			self[pn].Leaderboards = {}
 			self[pn].LeaderboardIndex = 0
-			self[pn].Blend = { lists={}, status={} }
 		end
 		MESSAGEMAN:Broadcast("ResetEntry")
 		-- Only make the request when this actor gets actually displayed through the sort menu.
 		self:queuecommand("SendLeaderboardRequest")
 	end,
-	HideLeaderboardCommand=function(self)
-		CancelBlended(self)
-		self:visible(false)
-	end,
-	OffCommand=function(self) CancelBlended(self) end,
+	HideLeaderboardCommand=function(self) self:visible(false) end,
 	LeaderboardInputEventMessageCommand=function(self, event)
 		local pn = ToEnumShortString(event.PlayerNumber)
 		if #self[pn].Leaderboards == 0 then return end
@@ -431,10 +349,6 @@ local af = Def.ActorFrame{
 	},
 	RequestResponseActor(17, 50)..{
 		SendLeaderboardRequestCommand=function(self)
-			-- The blended board (GrooveStats/ArrowCloud, read only) goes first.
-			for player in ivalues(PlayerNumber) do
-				StartBlended(self:GetParent(), player)
-			end
 			-- If a player does not have an API key or chart hash just show the local leaderboard.
 			for i=1,2 do
 				local pn = "P"..i
@@ -446,7 +360,7 @@ local af = Def.ActorFrame{
 					leaderboardList[#leaderboardList + 1] = {
 						Name="Machine's  Best",
 						Data=DeepCopy(localData),
-						IsEX=false
+						Kind="WF"
 					}
 					self:GetParent()[pn]["LeaderboardIndex"] = 1
 					UpdatePaneIcons(self:GetParent(), pn)
@@ -461,8 +375,7 @@ local af = Def.ActorFrame{
 						local leaderboardList = self:GetParent()[pn]["Leaderboards"]
 						leaderboardList[#leaderboardList + 1] = {
 							Name="ECFA Cloud",
-							Disabled=true,
-							IsEX=false
+							Disabled=true
 						}
 						SetLeaderboardForPlayer(i, leaderboard, leaderboardList[1], false)
 					end
@@ -472,8 +385,10 @@ local af = Def.ActorFrame{
 
 			local sendRequest = false
 			local headers = {}
+			-- external=1: ECFA Cloud adds the chart's GrooveStats and ArrowCloud EX boards.
 			local query = {
 				maxLeaderboardResults=NumEntries,
+				external=1,
 			}
 
 			for i=1,2 do
