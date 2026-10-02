@@ -330,6 +330,16 @@ IsServiceAllowed = function(condition)
 end
 
 -- -----------------------------------------------------------------------
+-- Songs marked "(No CMOD)" in their title or subtitle (the ITL convention) can't be
+-- played with a constant speed mod: those plays aren't submitted, and ECFA Cloud
+-- refuses them and never gives them event points.
+IsNoCmodSong = function(song)
+	if not song then return false end
+	local titles = (song:GetDisplayFullTitle() or "").." "..(song:GetTranslitFullTitle() or "")
+	return titles:lower():match("no%s*%-?%s*cmod") ~= nil
+end
+
+-- -----------------------------------------------------------------------
 -- ValidForECFACloud contains various checks to determine whether the score
 -- should be permitted on ECFA Cloud and returns a table of booleans, one per
 -- check, and also a bool indicating whether all the checks were satisfied or not.
@@ -434,6 +444,9 @@ ValidForECFACloud = function(player)
 
 	-- Waterfall doesn't rescore early hits.
 	valid[13] = ToEnumShortString(PREFSMAN:GetPreference("MinTNSToScoreNotes")) == "None"
+
+	-- No CMod on "(No CMOD)" charts.
+	valid[14] = not (po:CMod() ~= nil and IsNoCmodSong(GAMESTATE:GetCurrentSong()))
 
 	-- ------------------------------------------
 	-- return the entire table so that we can let the player know which settings,

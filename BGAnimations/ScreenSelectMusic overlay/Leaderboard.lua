@@ -1,14 +1,31 @@
 local NumEntries = 13
 local RowHeight = 24
+local paneWidth2Player = 230
 
-local SetEntryText = function(rank, name, score, date, actor)
+-- Name column; blended rows narrow it to fit the source tag after the rank.
+local NameX, NameMaxWidth = -paneWidth2Player/2 + 100, 130
+local BlendedNameX, BlendedNameMaxWidth = -paneWidth2Player/2 + 113, 104
+
+-- source: a BlendedSource key ("ECFA", "GS" or "AC") for blended rows, else nil.
+local SetEntryText = function(rank, name, score, date, actor, source)
 	if actor == nil then return end
 
-	actor:GetChild("Rank"):settext(rank)
-	actor:GetChild("Name"):settext(name)
-	actor:GetChild("Score"):settext(score)
-	actor:GetChild("Date"):settext(date)
+	actor:GetChild("Rank"):settext(rank):diffuse(Color.White)
+	actor:GetChild("Name"):settext(name):diffuse(Color.White)
+	actor:GetChild("Score"):settext(score):diffuse(Color.White)
+	actor:GetChild("Date"):settext(date):diffuse(Color.White)
+
+	local tag = BlendedSource[source or ""]
+	actor:GetChild("Source"):settext(tag and tag.label or ""):diffuse(tag and tag.color or Color.White)
+	if tag then
+		actor:GetChild("Name"):x(BlendedNameX):maxwidth(BlendedNameMaxWidth)
+	else
+		actor:GetChild("Name"):x(NameX):maxwidth(NameMaxWidth)
+	end
 end
+
+local SelfColor = color("#A1FF94")
+local RivalColor = color("#BD94FF")
 
 local SetLeaderboardForPlayer = function(player_num, leaderboard, leaderboardData, isRanked)
 	if leaderboard == nil or leaderboardData == nil then return end
@@ -16,7 +33,18 @@ local SetLeaderboardForPlayer = function(player_num, leaderboard, leaderboardDat
 	local entryNum = 1
 	local rivalNum = 1
 
-	
+	-- The blended board's legend: a source is dimmed while loading and faint
+	-- when it failed or the player has no key for it.
+	local blended = leaderboardData["Blended"]
+	for source in ivalues(BlendedSources) do
+		local legend = leaderboard:GetChild("Legend"..source.key)
+		legend:visible(blended and true or false)
+		if blended then
+			local status = leaderboardData["Status"][source.key]
+			legend:diffuse(source.color):diffusealpha(status == "ok" and 1 or (status == "pending" and 0.5 or 0.2))
+		end
+	end
+
 	if leaderboardData["Disabled"] then
 		if leaderboardData["Name"] then
 			local name = leaderboardData["Name"]
@@ -53,17 +81,30 @@ local SetLeaderboardForPlayer = function(player_num, leaderboard, leaderboardDat
 		if leaderboardData["Data"] then
 			local added = {}
 			for gsEntry in ivalues(leaderboardData["Data"]) do
-				if not added[gsEntry["name"]] then
-					added[gsEntry["name"]] = true
+				-- The blended board can list the same name once per source.
+				local key = blended and (gsEntry["source"].."\n"..gsEntry["name"]) or gsEntry["name"]
+				if not added[key] then
+					added[key] = true
 					local entry = leaderboard:GetChild("LeaderboardEntry"..entryNum)
 					SetEntryText(
-						gsEntry["rank"]..".",
+						gsEntry["rank"] and (gsEntry["rank"]..".") or "",
 						gsEntry["name"],
 						string.format("%.2f%%", gsEntry["score"]/100),
-						ParseECFACloudDate(gsEntry["date"]),
-						entry
+						blended and FormatBlendedDate(gsEntry["date"]) or ParseECFACloudDate(gsEntry["date"]),
+						entry,
+						blended and gsEntry["source"] or nil
 					)
-					if gsEntry["isRival"] then
+					if blended then
+						-- Your own scores can show up once per service, so color the
+						-- text instead of using the single highlight bar.
+						entry:diffuse(Color.White)
+						local clr = gsEntry["isSelf"] and SelfColor or (gsEntry["isRival"] and RivalColor or nil)
+						if clr then
+							for child in ivalues({"Rank", "Name", "Score", "Date"}) do
+								entry:GetChild(child):diffuse(clr)
+							end
+						end
+					elseif gsEntry["isRival"] then
 						if gsEntry["isFail"] then
 							entry:GetChild("Rank"):diffuse(Color.Black)
 							entry:GetChild("Name"):diffuse(Color.Black)
@@ -102,11 +143,15 @@ local SetLeaderboardForPlayer = function(player_num, leaderboard, leaderboardDat
 	-- Empty out any remaining entries.
 	-- This also handles the error case. If success is false, then the above if block will not run.
 	-- and we will set the first entry to "Failed to Load 😞".
+	local stillLoading = false
+	for source in ivalues(blended and BlendedSources or {}) do
+		stillLoading = stillLoading or leaderboardData["Status"][source.key] == "pending"
+	end
 	for i=entryNum, NumEntries do
 		local entry = leaderboard:GetChild("LeaderboardEntry"..i)
 		-- We didn't get any scores if i is still == 1.
 		if i == 1 then
-			SetEntryText("", "No Scores", "", "", entry)
+			SetEntryText("", stillLoading and THEME:GetString("ECFACloud", "Loading") or "No Scores", "", "", entry)
 		else
 			-- Empty out the remaining rows.
 			SetEntryText("", "", "", "", entry)
@@ -145,6 +190,68 @@ local getLocalLeaderboard = function(pn)
     end
     return localData
 end
+-- Shows the More Leaderboards arrows when a player has more than one board.
+local UpdatePaneIcons = function(master, pn)
+	master:GetChild(pn.."Leaderboard"):GetChild("PaneIcons"):visible(#master[pn]["Leaderboards"] > 1)
+end
+
+-- Rebuilds a player's blended board from what has arrived so far, and redraws
+-- it if it's the board on screen.
+local RefreshBlended = function(master, pn)
+	local blend = master[pn] and master[pn].Blend
+	if not blend or not blend.page then return end
+	blend.page.Data = BlendLeaderboards(blend.lists, NumEntries)
+	UpdatePaneIcons(master, pn)
+	if master[pn]["Leaderboards"][master[pn]["LeaderboardIndex"]] == blend.page then
+		SetLeaderboardForPlayer(pn == "P1" and 1 or 2, master:GetChild(pn.."Leaderboard"), blend.page, master[pn].isRanked)
+	end
+end
+
+-- Puts the blended board first and asks GrooveStats (with the player's key) and
+-- ArrowCloud for the chart's EX leaderboard (read only).
+local StartBlended = function(master, player)
+	local pn = ToEnumShortString(player)
+	if not GAMESTATE:IsSideJoined(player) or SL[pn].Streams.Hash == "" or not HasBlendedLeaderboardSources(player) then return end
+
+	local blend = master[pn].Blend
+	blend.status = {
+		ECFA = (SL[pn].ApiKey ~= "" and IsServiceAllowed(SL.ECFACloud.Leaderboard)) and "pending" or "off",
+		GS = SL[pn].GrooveStatsApiKey ~= "" and "pending" or "off",
+		AC = "pending",
+	}
+	blend.page = {
+		Name=THEME:GetString("ECFACloud", "BlendedLeaderboard"),
+		Data={},
+		IsEX=true,
+		Blended=true,
+		Status=blend.status,
+	}
+	table.insert(master[pn]["Leaderboards"], 1, blend.page)
+	master[pn]["LeaderboardIndex"] = 1
+
+	blend.handle = FetchBlendedSources(player, SL[pn].Streams.Hash, NumEntries, function(results)
+		blend.handle = nil
+		for key in ivalues({"GS", "AC"}) do
+			if results[key] then
+				blend.lists[key] = results[key].entries
+				blend.status[key] = results[key].error and "error" or "ok"
+			end
+		end
+		RefreshBlended(master, pn)
+	end)
+	RefreshBlended(master, pn)
+end
+
+local CancelBlended = function(master)
+	for pn in ivalues({"P1", "P2"}) do
+		local blend = master[pn] and master[pn].Blend
+		if blend and blend.handle then
+			blend.handle:Cancel()
+			blend.handle = nil
+		end
+	end
+end
+
 local LeaderboardRequestProcessor = function(res, master)
 	if master == nil then return end
 
@@ -167,13 +274,20 @@ local LeaderboardRequestProcessor = function(res, master)
 				IsEX=false
 			}
 			master[pn]["LeaderboardIndex"] = 1
-			for j=1, NumEntries do
-				local entry = leaderboard:GetChild("LeaderboardEntry"..j)
-				if j == 1 then
-					SetEntryText("", text, "", "", entry)
-				else
-					-- Empty out the remaining rows.
-					SetEntryText("", "", "", "", entry)
+			local blend = master[pn].Blend
+			if blend.page then
+				-- The blended board still has the other services' scores.
+				if blend.status.ECFA == "pending" then blend.status.ECFA = "error" end
+				RefreshBlended(master, pn)
+			else
+				for j=1, NumEntries do
+					local entry = leaderboard:GetChild("LeaderboardEntry"..j)
+					if j == 1 then
+						SetEntryText("", text, "", "", entry)
+					else
+						-- Empty out the remaining rows.
+						SetEntryText("", "", "", "", entry)
+					end
 				end
 			end
 		end
@@ -187,6 +301,17 @@ local LeaderboardRequestProcessor = function(res, master)
 		local pn = "P"..i
 		local leaderboard = master:GetChild(pn.."Leaderboard")
 		local leaderboardList = master[pn]["Leaderboards"]
+
+		local blend = master[pn].Blend
+		if blend.page and blend.status.ECFA == "pending" then
+			if data[playerStr] and not data[playerStr]["error"] then
+				blend.lists.ECFA = BlendedEntriesFromECFACloud(data[playerStr]["exLeaderboard"])
+				blend.status.ECFA = "ok"
+			else
+				blend.status.ECFA = "error"
+			end
+			blend.page.Data = BlendLeaderboards(blend.lists, NumEntries)
+		end
 
 		if data[playerStr] then
 			master[pn].isRanked = data[playerStr]["isRanked"]
@@ -234,12 +359,8 @@ local LeaderboardRequestProcessor = function(res, master)
 			}
 			master[pn]["LeaderboardIndex"] = 1
 
-			if #leaderboardList > 1 then
-				leaderboard:GetChild("PaneIcons"):visible(true)
-			else
-				leaderboard:GetChild("PaneIcons"):visible(false)
-			end
 		end
+		UpdatePaneIcons(master, pn)
 
 		-- We assume that at least one leaderboard has been added.
 		-- If leaderboardData is nil as a result, the SetLeaderboardForPlayer
@@ -254,18 +375,24 @@ local af = Def.ActorFrame{
 	InitCommand=function(self) self:visible(false) end,
 	ShowLeaderboardCommand=function(self)
 		self:visible(true)
+		CancelBlended(self)
 		for i=1, 2 do
 			local pn = "P"..i
 			self[pn] = {}
 			self[pn].isRanked = false
 			self[pn].Leaderboards = {}
 			self[pn].LeaderboardIndex = 0
+			self[pn].Blend = { lists={}, status={} }
 		end
 		MESSAGEMAN:Broadcast("ResetEntry")
 		-- Only make the request when this actor gets actually displayed through the sort menu.
 		self:queuecommand("SendLeaderboardRequest")
 	end,
-	HideLeaderboardCommand=function(self) self:visible(false) end,
+	HideLeaderboardCommand=function(self)
+		CancelBlended(self)
+		self:visible(false)
+	end,
+	OffCommand=function(self) CancelBlended(self) end,
 	LeaderboardInputEventMessageCommand=function(self, event)
 		local pn = ToEnumShortString(event.PlayerNumber)
 		if #self[pn].Leaderboards == 0 then return end
@@ -304,7 +431,10 @@ local af = Def.ActorFrame{
 	},
 	RequestResponseActor(17, 50)..{
 		SendLeaderboardRequestCommand=function(self)
-      SM("SendLeaderboardRequest")
+			-- The blended board (GrooveStats/ArrowCloud, read only) goes first.
+			for player in ivalues(PlayerNumber) do
+				StartBlended(self:GetParent(), player)
+			end
 			-- If a player does not have an API key or chart hash just show the local leaderboard.
 			for i=1,2 do
 				local pn = "P"..i
@@ -319,6 +449,7 @@ local af = Def.ActorFrame{
 						IsEX=false
 					}
 					self:GetParent()[pn]["LeaderboardIndex"] = 1
+					UpdatePaneIcons(self:GetParent(), pn)
 				end
 			end
 			if not IsServiceAllowed(SL.ECFACloud.Leaderboard) then
@@ -370,7 +501,6 @@ local af = Def.ActorFrame{
 }
 
 local paneWidth1Player = 330
-local paneWidth2Player = 230
 local paneWidth = (GAMESTATE:GetNumSidesJoined() == 1) and paneWidth1Player or paneWidth2Player
 local paneHeight = 360
 local borderWidth = 2
@@ -460,6 +590,38 @@ for player in ivalues( PlayerNumber ) do
 				self:y(-paneHeight/2 + 12)
 				self:x(paneWidth/2 - 16)
 				self:visible(false)
+			end
+		},
+
+		-- Blended board legend: which services are in the list.
+		LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal").. {
+			Name="LegendECFA",
+			Text=BlendedSource["ECFA"].label,
+			InitCommand=function(self)
+				self:zoom(0.75):horizalign(left):y(-paneHeight/2 + 12):visible(false)
+			end,
+			RefreshCommand=function(self)
+				self:x(-self:GetParent():GetWidth()/2 + 6 + 0 * 22)
+			end
+		},
+		LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal").. {
+			Name="LegendGS",
+			Text=BlendedSource["GS"].label,
+			InitCommand=function(self)
+				self:zoom(0.75):horizalign(left):y(-paneHeight/2 + 12):visible(false)
+			end,
+			RefreshCommand=function(self)
+				self:x(-self:GetParent():GetWidth()/2 + 6 + 1 * 22)
+			end
+		},
+		LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal").. {
+			Name="LegendAC",
+			Text=BlendedSource["AC"].label,
+			InitCommand=function(self)
+				self:zoom(0.75):horizalign(left):y(-paneHeight/2 + 12):visible(false)
+			end,
+			RefreshCommand=function(self)
+				self:x(-self:GetParent():GetWidth()/2 + 6 + 2 * 22)
 			end
 		},
 
@@ -600,6 +762,20 @@ for player in ivalues( PlayerNumber ) do
 				end
 			},
 
+			-- Source tag (EC/GS/AC) on blended rows, between the rank and the name.
+			LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal").. {
+				Name="Source",
+				Text="",
+				InitCommand=function(self)
+					self:horizalign(left)
+					self:zoom(0.75)
+					self:x(-paneWidth2Player/2 + 36 + borderWidth)
+				end,
+				ResetEntryMessageCommand=function(self)
+					self:settext("")
+				end
+			},
+
 			LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal").. {
 				Name="Name",
 				Text=(i==1 and THEME:GetString("ECFACloud", "Loading") or ""),
@@ -612,6 +788,7 @@ for player in ivalues( PlayerNumber ) do
 				ResetEntryMessageCommand=function(self)
 					self:settext(i==1 and THEME:GetString("ECFACloud", "Loading") or "")
 					self:diffuse(Color.White)
+					self:x(NameX):maxwidth(NameMaxWidth)
 				end
 			},
 

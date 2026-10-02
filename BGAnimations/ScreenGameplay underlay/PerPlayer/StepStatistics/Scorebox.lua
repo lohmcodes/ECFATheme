@@ -20,19 +20,23 @@ local height = 80
 local row_spacing = height / NumEntries
 
 local cur_style = 0
-local num_styles = 3
+local num_styles = 4
 
 local ECFACloudPink = color("#b8327a")
 local ECFACloudCyan = color("#2b8fb3")
 local EventGold = color("#c9a227")
+local BlendedSilver = color("#c0c0c0")
 
 -- Styles 0 and 1 are the ECFA Cloud ITG and EX leaderboards (EX first when the
 -- player uses EX scoring); style 2 is the event leaderboard, when the chart is
--- in an open ECFA Cloud event.
+-- in an open ECFA Cloud event; style 3 is the blended board (ECFA Cloud,
+-- GrooveStats and ArrowCloud EX scores in one list; the other two are only read
+-- from, see SL-Helpers-BlendedLeaderboard.lua).
 local style_color = {
 	[0] = ECFACloudPink,
 	[1] = ECFACloudCyan,
 	[2] = EventGold,
+	[3] = BlendedSilver,
 }
 if SL[pn].ActiveModifiers.ShowExScore then
 	style_color[0], style_color[1] = ECFACloudCyan, ECFACloudPink
@@ -48,7 +52,16 @@ local anim_seconds = transition_seconds
 
 local all_data = {}
 
+-- The blended board waits for ECFA Cloud and the other services to all answer.
+local blend = { lists={}, ecfaDone=false, extDone=false, wanted=false, handle=nil }
+-- Whether the box is rotating through boards (so a late board doesn't start a second rotation).
+local looping = false
+
 local ResetAllData = function()
+	blend.lists = {}
+	blend.ecfaDone = false
+	blend.extDone = false
+
 	SL[pn].Rival = {}
 	SL[pn].Rival.Score = 0
 	SL[pn].Rival.ExScore = 0
@@ -71,6 +84,7 @@ local ResetAllData = function()
 				["isRival"]=false,
 				["isFail"]=false,
 				["isEx"]=false,
+				["source"]=nil,
 			}
 		end
 		all_data[#all_data + 1] = data
@@ -84,7 +98,8 @@ local HasData = function(idx)
 	return all_data[idx+1] and all_data[idx+1].has_data
 end
 
-local SetScoreData = function(data_idx, score_idx, rank, name, score, isSelf, isRival, isFail, isEx)
+-- source: the BlendedSource key of a row on the blended board, else nil.
+local SetScoreData = function(data_idx, score_idx, rank, name, score, isSelf, isRival, isFail, isEx, source)
 	if score_idx > NumEntries then return end
 	all_data[data_idx].has_data = true
 
@@ -96,10 +111,11 @@ local SetScoreData = function(data_idx, score_idx, rank, name, score, isSelf, is
 	score_data.isRival = isRival
 	score_data.isFail = isFail
 	score_data.isEx = isEx
+	score_data.source = source
 
 	-- Remember the best rival/self score and the top score of the ITG and EX
-	-- boards for the rival pace in SubtractiveScoring.
-	if data_idx == 3 or tonumber(score) == nil then return end
+	-- boards for the rival pace in SubtractiveScoring (ECFA Cloud boards only).
+	if data_idx >= 3 or tonumber(score) == nil then return end
 	local value = tonumber(score)
 	if not isFail and (isRival or isSelf) then
 		if isEx then
@@ -140,6 +156,21 @@ local FillBoard = function(data_idx, entries, isEx)
 	end
 end
 
+-- Fills the blended board (style 3) once ECFA Cloud and the other services have
+-- all answered. kick: start the rotation if it isn't running (the ECFA Cloud
+-- response handler does that itself).
+local UpdateBlended = function(master, kick)
+	if not blend.wanted or not blend.ecfaDone or not blend.extDone then return end
+	SetScoreData(4, 1, "", "No Scores", "", false, false, false, true)
+	for i, e in ipairs(BlendLeaderboards(blend.lists, NumEntries)) do
+		SetScoreData(4, i, e.rank and tostring(e.rank) or "", e.name, string.format("%.2f", e.score/100),
+			e.isSelf, e.isRival, e.isFail, true, e.source)
+	end
+	if kick and not looping then
+		master:queuecommand("CheckScorebox")
+	end
+end
+
 local LeaderboardRequestProcessor = function(res, master)
 	if master == nil then return end
 
@@ -152,6 +183,8 @@ local LeaderboardRequestProcessor = function(res, master)
 			text = "Failed to Load 😞"
 		end
 		SetScoreData(1, 1, "", text, "", false, false, false, false)
+		blend.ecfaDone = true
+		UpdateBlended(master, false)
 		master:queuecommand("CheckScorebox")
 		return
 	end
@@ -163,6 +196,8 @@ local LeaderboardRequestProcessor = function(res, master)
 	if data and data[playerStr] and data[playerStr]["error"] then
 		local text = data[playerStr]["error"] == "invalid-api-key" and "Invalid API key" or "Failed to Load 😞"
 		SetScoreData(1, 1, "", text, "", false, false, false, false)
+		blend.ecfaDone = true
+		UpdateBlended(master, false)
 		master:queuecommand("CheckScorebox")
 		return
 	end
@@ -189,7 +224,11 @@ local LeaderboardRequestProcessor = function(res, master)
 			FillBoard(3, ev["leaderboard"], false)
 			master:playcommand("SetEventName")
 		end
+
+		blend.lists.ECFA = BlendedEntriesFromECFACloud(data[playerStr]["exLeaderboard"])
 	end
+	blend.ecfaDone = true
+	UpdateBlended(master, false)
 	master:queuecommand("CheckScorebox")
 end
 
@@ -212,6 +251,12 @@ local af = Def.ActorFrame{
 		end
 		
 		self.isFirst = true
+	end,
+	OffCommand=function(self)
+		if blend.handle then
+			blend.handle:Cancel()
+			blend.handle = nil
+		end
 	end,
 	CheckScoreboxCommand=function(self)
 		self:queuecommand("LoopScorebox")
@@ -244,7 +289,8 @@ local af = Def.ActorFrame{
 		end
 
 		-- Loop only if there's something new to loop to.
-		if start ~= cur_style then
+		looping = (start ~= cur_style)
+		if looping then
 			self:sleep(loop_seconds):queuecommand("LoopScorebox")
 		end
 	end,
@@ -276,6 +322,8 @@ local af = Def.ActorFrame{
 				local rankActor = self:GetParent():GetChild("Rank"..i)
 				if nameActor then nameActor:settext(i==1 and "Loading..." or "") end
 				if scoreActor then scoreActor:settext("") end
+				local sourceActor = self:GetParent():GetChild("Source"..i)
+				if sourceActor then sourceActor:settext("") end
 				if rankActor then
 					if i==1 and rankActor.GetTexture then
 						-- crown sprite: fade out
@@ -284,6 +332,25 @@ local af = Def.ActorFrame{
 						rankActor:settext("")
 					end
 				end
+			end
+
+			-- GrooveStats/ArrowCloud for the blended board, alongside the ECFA Cloud request.
+			if blend.handle then
+				blend.handle:Cancel()
+				blend.handle = nil
+			end
+			blend.wanted = SL[pn].ActiveModifiers.SBBlended and HasBlendedLeaderboardSources(player)
+			if blend.wanted then
+				local hash = SL[pn].Streams.Hash
+				local master = self:GetParent()
+				blend.handle = FetchBlendedSources(player, hash, NumEntries, function(results)
+					if hash ~= SL[pn].Streams.Hash then return end
+					blend.handle = nil
+					blend.lists.GS = results.GS and results.GS.entries
+					blend.lists.AC = results.AC and results.AC.entries
+					blend.extDone = true
+					UpdateBlended(master, true)
+				end)
 			end
 
 			-- We technically will send two requests in ultrawide versus mode since
@@ -341,7 +408,7 @@ local af = Def.ActorFrame{
 			if SL[pn].ActiveModifiers.ShowExScore then self:diffusealpha(0.3) end
 		end,
 		LoopScoreboxCommand=function(self)
-			if (cur_style == 1 and not SL[pn].ActiveModifiers.ShowExScore) or (cur_style == 0 and SL[pn].ActiveModifiers.ShowExScore) then
+			if (cur_style == 1 and not SL[pn].ActiveModifiers.ShowExScore) or (cur_style == 0 and SL[pn].ActiveModifiers.ShowExScore) or cur_style == 3 then
 				self:sleep(anim_seconds/2):linear(anim_seconds/2):diffusealpha(0.3)
 			else
 				self:linear(anim_seconds/2):diffusealpha(0)
@@ -431,8 +498,29 @@ for i=1,NumEntries do
 			elseif score.isRival then
 				clr = rival_color
 			end
+			self:maxwidth(cur_style == 3 and 72 or 100)
 			self:settext(score.name)
 			self:linear(anim_seconds/2):diffusealpha(1):diffuse(clr)
+		end
+	}
+
+	-- Source tag (EC/GS/AC) on the blended board, just left of the score.
+	af[#af+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{
+		Name="Source"..i,
+		Text="",
+		InitCommand=function(self)
+			self:xy(-width/2 + 118, y):horizalign(right):zoom(0.6)
+		end,
+		LoopScoreboxCommand=function(self)
+			self:linear(anim_seconds/2):diffusealpha(0):queuecommand("SetScorebox")
+		end,
+		SetScoreboxCommand=function(self)
+			local score = all_data[cur_style+1]["scores"][i]
+			local tag = cur_style == 3 and BlendedSource[score.source or ""]
+			self:settext(tag and tag.label or "")
+			if tag then
+				self:linear(anim_seconds/2):diffuse(tag.color)
+			end
 		end
 	}
 

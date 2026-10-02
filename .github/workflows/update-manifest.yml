@@ -1,0 +1,37 @@
+# Publishes what the in-game "Update Theme" option compares against
+# (Scripts/SL-Helpers-ThemeUpdate.lua): version.json and manifest.json, force-pushed
+# to the update-manifest branch on every push to master, so master gets no bot commits.
+name: Update manifest
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-manifest
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build version.json and manifest.json
+        run: python3 .github/scripts/update_manifest.py "$RUNNER_TEMP/manifest"
+
+      - name: Publish to the update-manifest branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd "$RUNNER_TEMP/manifest"
+          git init -q -b update-manifest
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add version.json manifest.json
+          git commit -q -m "Manifest for ${GITHUB_SHA}"
+          git push -q -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:update-manifest

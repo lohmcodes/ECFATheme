@@ -110,6 +110,7 @@ local permitted_profile_settings = {
 	SBITGScore           = "boolean",
 	SBExScore            = "boolean",
 	SBEvents             = "boolean",
+	SBBlended            = "boolean",
 	
 	FlashMiss            = "boolean",
 	FlashWayOff          = "boolean",
@@ -199,6 +200,7 @@ LoadProfileCustom = function(profile, dir)
 
 		SL[pn]:initialize()
 		ParseECFACloudIni(player)
+		ParseBlendedLeaderboardKeys(player)
 		ReadItlFile(player)
 
 		SL[pn].Stages = stages

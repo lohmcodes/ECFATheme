@@ -79,6 +79,7 @@ local PlayerDefaults = {
 				SBITGScore = true,
 				SBExScore = true,
 				SBEvents = true,
+				SBBlended = true,
 				
 				FlashMiss = true,
 				FlashWayOff = false,
@@ -146,6 +147,9 @@ local PlayerDefaults = {
 
 			-- The ECFA Cloud API key loaded for this player (ECFACloud.ini)
 			self.ApiKey = ""
+			-- Read-only keys for the blended leaderboard (GrooveStats.ini, ArrowCloud.ini)
+			self.GrooveStatsApiKey = ""
+			self.ArrowCloudApiKey = ""
 			self.ECFACloudUsername = ""
 			-- Whether or not the player is playing on pad.
 			self.IsPadPlayer = false

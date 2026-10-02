@@ -5,3 +5,6 @@ Modules/Tinkering.lua
 deploy.sh
 CLAUDE.md
 log.txt
+# Written by the in-game theme updater
+Other/installed-version.txt
+Other/installed-manifest.json

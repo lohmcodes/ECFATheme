@@ -36,22 +36,10 @@ af[#af+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal")..{
   end
 }
 
--- For tournament packs that have No CMOD rules 
+-- "(No CMOD)" charts: a CMod play won't be submitted to ECFA Cloud, so say so loudly.
 if not GAMESTATE:IsCourseMode() then
 	local song = GAMESTATE:GetCurrentSong()
-	local song_dir = song:GetSongDir()
-	local group = string.lower(song:GetGroupName())
-	local tourneyPack = false
-	local tourneyPacks = {"itl", "rip"}
-	for pack in ivalues(tourneyPacks) do
-		if string.find(group,pack) ~= nil then tourneyPack = true end
-	end
-
-	-- Tourney specific only
-	-- for tournament packs with rules, give a more obvious warning when cmod is on when it is not allowed
-	local subtitle = song:GetDisplaySubTitle()
-	if tourneyPack 
-		and string.find(string.upper(subtitle), "(NO CMOD)") 
+	if IsNoCmodSong(song)
 		and GAMESTATE:GetPlayerState(ToEnumShortString(player)):GetPlayerOptions("ModsLevel_Preferred"):CMod() then
 			af[#af+1] = Def.ActorFrame{
 				InitCommand=function(self)

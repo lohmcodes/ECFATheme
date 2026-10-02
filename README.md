@@ -10,10 +10,12 @@ Only for ITGmania. Source: <https://github.com/lohmcodes/ECFATheme>
 Clone or download this repository into ITGmania's `Themes` folder (e.g. `Themes/ECFATheme`) and select it as the
 theme in ITGmania's options.
 
-ITGmania only lets themes talk to hosts listed in `HttpAllowHosts` in `Save/Preferences.ini`. Add ECFA Cloud:
+ITGmania only lets themes talk to hosts listed in `HttpAllowHosts` in `Save/Preferences.ini` (a comma-separated
+list). Add ECFA Cloud, plus GitHub's file host for theme updates and GrooveStats/ArrowCloud for the blended
+leaderboard:
 
 ```ini
-HttpAllowHosts=*.ecfa.online,ecfa.online
+HttpAllowHosts=<existing hosts>,*.ecfa.online,ecfa.online,*.githubusercontent.com,*.groovestats.com,*.arrowcloud.dance
 ```
 
 If the host is blocked, the title menu shows a message saying which host to add.
@@ -60,6 +62,41 @@ Waterfall is the only play mode.
   sort menu's leaderboard popup and the gameplay scorebox show the chart's ECFA Cloud Waterfall leaderboard and
   the secondary EX (and, in the popup, ITG) leaderboards, plus the event leaderboard when the chart is part of an
   open ECFA Cloud event.
+- **Blended leaderboard.** The popup's first page, and "Blended Scores" in the `Show Score Boxes` player option,
+  list the chart's EX scores from ECFA Cloud, GrooveStats and ArrowCloud together in one list, best first, each
+  row tagged EC, GS or AC. GrooveStats and ArrowCloud are only read from (one GET per chart); nothing is ever
+  submitted to them. ArrowCloud's leaderboards are public, so every player gets them. GrooveStats only answers
+  with the player's own key, and an ArrowCloud key additionally marks the player's own scores. Keys are read from
+  the profile folder:
+
+  ```ini
+  ; GrooveStats.ini
+  [GrooveStats]
+  ApiKey=<64-character GrooveStats API key>
+
+  ; ArrowCloud.ini
+  [ArrowCloud]
+  ApiKey=<ArrowCloud API key>
+  ```
+
+  Their hosts must be in `HttpAllowHosts` too (`*.groovestats.com,*.arrowcloud.dance`). Without a GrooveStats key,
+  GrooveStats is left out and the popup's legend dims it. The code is in `Scripts/SL-Helpers-BlendedLeaderboard.lua`.
+
+## Theme updates
+
+When GitHub has a newer version of the theme, the title menu lists **Update Theme**. It compares every installed
+file with the new version's, downloads only the ones that differ (each checked against its SHA-256), copies them in
+once all of them have arrived, and reloads the theme. Nothing changes if a download fails or Back is pressed first.
+
+- Every push to `master` runs `.github/workflows/update-manifest.yml`, which force-pushes `version.json` and
+  `manifest.json` (every file's SHA-256) to the `update-manifest` branch. The theme reads them from
+  raw.githubusercontent.com, so `*.githubusercontent.com` must be in `HttpAllowHosts`.
+- The installed version is `Other/installed-version.txt` (written by the updater), or the commit of a git clone.
+- ITGmania can't delete files from Lua, so files removed from the theme stay behind. Removed `Scripts/` and
+  `Modules/` files are emptied so they no longer run.
+- In a theme folder that's a git clone, updating in game leaves the files ahead of git. Use
+  `git fetch && git reset --hard origin/master` before going back to `git pull`.
+- The code is in `Scripts/SL-Helpers-ThemeUpdate.lua` and `BGAnimations/ScreenECFAThemeUpdate underlay/`.
 - **Score submission.** Passed Waterfall plays are submitted automatically on the evaluation screen
   (`ScreenEvaluation common/Shared/AutoSubmitScore.lua`): Waterfall judgments, lifebars, FA+ counts, the
   simulated ITG judgments and the timing windows in use, along with pack, song and chart details, and song

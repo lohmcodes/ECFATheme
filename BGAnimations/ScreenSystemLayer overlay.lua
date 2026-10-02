@@ -530,6 +530,25 @@ t[#t+1] = Def.ActorFrame{
 }
 
 -- -----------------------------------------------------------------------
+-- Looks for a newer version of the theme on GitHub once per session
+-- (Scripts/SL-Helpers-ThemeUpdate.lua). If one turns up while the title menu is
+-- showing, the menu is rebuilt so it lists "Update Theme".
+
+t[#t+1] = Def.Actor{
+	ScreenChangedMessageCommand=function(self)
+		local screen = SCREENMAN:GetTopScreen()
+		local name = screen and screen:GetName()
+		if name ~= "ScreenTitleMenu" and name ~= "ScreenInit" and name ~= "ScreenLogo" then return end
+		CheckForThemeUpdate(function(available)
+			local top = SCREENMAN:GetTopScreen()
+			if available and top and top:GetName() == "ScreenTitleMenu" then
+				SCREENMAN:SetNewScreen("ScreenTitleMenu")
+			end
+		end)
+	end,
+}
+
+-- -----------------------------------------------------------------------
 -- SystemMessage stuff.
 -- Put it on top of everything
 -- this is what appears when someone uses SCREENMAN:SystemMessage(text)
