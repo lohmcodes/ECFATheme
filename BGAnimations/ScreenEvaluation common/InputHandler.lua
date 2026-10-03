@@ -122,8 +122,9 @@ local OtherController = {
 
 return function(event)
 
-
 	if not (event and event.PlayerNumber and event.button) then return false end
+	-- The ECFA Cloud results window has the input while it's open.
+	if SL.ECFACloud.ResultsOpen then return false end
 
 	-- get a "controller number" and an "other controller number"
 	-- if the input event came from GameController_1, cn will be 1 and ocn will be 2

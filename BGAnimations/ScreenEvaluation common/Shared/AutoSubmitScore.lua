@@ -1,34 +1,15 @@
--- Submits each player's score to ECFA Cloud after a song, shows the results
--- (leaderboard, PB/WR, event results), uploads missing pack/song banners, and
--- queues scores that couldn't be submitted for later (Scripts/SL-ECFACloud-Pending.lua).
+-- Submits each player's score to ECFA Cloud after a song, shows the results (in
+-- the results window, Shared/ECFACloudResults.lua, plus PB/WR text and an event
+-- summary line), uploads missing pack/song banners, and queues scores that
+-- couldn't be submitted for later (Scripts/SL-ECFACloud-Pending.lua).
 
 if GAMESTATE:IsCourseMode() or not ThemePrefs.Get("EnableECFACloud") then return end
 
 -- When ECFA Cloud is unreachable we still queue eligible scores for later.
 local online = IsServiceAllowed(SL.ECFACloud.AutoSubmit)
 
-local NumEntries = math.min(10, PREFSMAN:GetPreference("MaxHighScoresPerListForMachine"))
-
-local SetEntryText = function(rank, name, score, date, actor)
-	if actor == nil then return end
-
-	actor:GetChild("Rank"):settext(rank)
-	actor:GetChild("Name"):settext(name)
-	actor:GetChild("Score"):settext(score)
-	actor:GetChild("Date"):settext(date)
-end
-
--- Show the full ECFA Cloud username, falling back to the machine tag.
-local GetMachineTag = function(entry)
-	if not entry then return end
-	if entry["name"] then
-		return entry["name"]
-	end
-	if entry["machineTag"] then
-		return entry["machineTag"]:sub(1, 4):upper()
-	end
-	return ""
-end
+-- Leaderboard rows to ask for (the results window shows the top, keeping the player's own row).
+local NumEntries = 10
 
 -- The engine's Waterfall judgments, plus holds/rolls/mines and chart totals.
 local GetJudgmentCounts = function(player)
@@ -139,37 +120,30 @@ local BuildSubmission = function(player, packInfo, songInfo)
 	}
 end
 
--- Banners ECFA Cloud has already asked for this session (upload each only once).
+-- Banners already being uploaded from this screen (each once, even with two players).
 local uploadedBanners = {}
 
--- Fills Pane9 (event results) and the one-line event summary for one side.
-local ShowEventResults = function(overlay, i, events)
-	local panes = overlay:GetChild("Panes")
-	local eventPane = panes and panes:GetChild("Pane9_SideP"..i)
-	eventPane = eventPane and eventPane:GetChild("")
-	local summary = overlay:GetChild("AutoSubmitMaster"):GetChild("P"..i.."EventText")
-
-	if not events or #events == 0 then
-		if eventPane then eventPane:playcommand("NoEvent") end
-		return
+-- The one-line event summary under a side, e.g. "ECFA 2026 · Timing #2 · RP #3 ▲2"
+-- (the results window has the details).
+local ShowEventSummary = function(master, side, events)
+	local summary = master:GetChild("P"..side.."EventText")
+	if not summary or not events or #events == 0 or not GAMESTATE:IsSideJoined("PlayerNumber_P"..side) then return end
+	local Rank = function(rank, previous)
+		if not rank then return "unranked" end
+		return "#"..rank..((previous and previous > rank) and (" ▲"..(previous - rank)) or "")
 	end
-
-	-- Show the first event on the pane; list every event in the summary line.
-	if eventPane then eventPane:playcommand("ShowEvent", { event=events[1] }) end
-	if summary and GAMESTATE:IsSideJoined("PlayerNumber_P"..i) then
-		local parts = {}
-		for e in ivalues(events) do
-			local rank = e.rank and ("#"..e.rank) or "unranked"
-			if e.rank and e.previousRank and e.previousRank > e.rank then
-				rank = rank.." ▲"..(e.previousRank - e.rank)
-			end
-			local delta = e.rankingPointsDelta or 0
-			parts[#parts+1] = ("%s · %s RP · %s"):format(e.name, (delta >= 0 and "+" or "")..delta, rank)
+	local parts = {}
+	for e in ivalues(events) do
+		local line = e.name
+		-- Older servers send only the Ranking Points board.
+		if e.timingRank ~= nil or e.timingPoints ~= nil then
+			line = line.." · Timing "..Rank(e.timingRank, e.previousTimingRank)
 		end
-		summary:settext(table.concat(parts, "   "))
-		summary:visible(true)
-		DiffuseEmojis(summary)
+		parts[#parts+1] = line.." · RP "..Rank(e.rank, e.previousRank)
 	end
+	summary:settext(table.concat(parts, "   "))
+	summary:visible(true)
+	DiffuseEmojis(summary)
 end
 
 -- Queues the given submissions for later and tells each player.
@@ -199,18 +173,21 @@ end
 local AutoSubmitRequestProcessor = function(res, ctx)
 	local overlay = ctx.overlay
 	local master = overlay:GetChild("AutoSubmitMaster")
-	local P1SubmitText = master:GetChild("P1SubmitText")
-	local P2SubmitText = master:GetChild("P2SubmitText")
+	local popup = overlay:GetChild("ECFACloudResults")
 
 	if res.error or res.statusCode ~= 200 then
 		local code = res.statusCode or 0
 		if res.error or code == 0 or code == 429 or code >= 500 then
 			-- ECFA Cloud unreachable or temporarily failing: keep the scores for later.
 			QueueForLater(master, ctx.submissions)
+			if popup then popup:playcommand("Failed", { text=THEME:GetString("ECFACloud", "Unreachable") }) end
 		else
 			-- Rejected outright; retrying wouldn't help.
-			if P1SubmitText then P1SubmitText:queuecommand("SubmitFailed") end
-			if P2SubmitText then P2SubmitText:queuecommand("SubmitFailed") end
+			for side in pairs(ctx.submissions) do
+				local text = master:GetChild("P"..side.."SubmitText")
+				if text then text:queuecommand("SubmitFailed") end
+			end
+			if popup then popup:playcommand("Failed", { text=THEME:GetString("ECFACloud", "SubmitFailed") }) end
 		end
 		return
 	end
@@ -222,149 +199,68 @@ local AutoSubmitRequestProcessor = function(res, ctx)
 	local data = JsonDecode(res.body)
 	local succeeded = {}
 
-	-- Hijack the leaderboard pane to display the ECFA Cloud leaderboards.
-	if panes then
-		for i=1,2 do
-			local playerStr = "player"..i
-			local entryNum = 1
-			local rivalNum = 1
-			-- Pane 8 is the ECFA Cloud highscores pane.
-			local highScorePane = panes:GetChild("Pane8_SideP"..i):GetChild("")
-			local QRPane = panes:GetChild("Pane7_SideP"..i):GetChild("")
+	for side, submitted in pairs(ctx.submissions) do
+		local playerData = data and data["player"..side]
+		local submitText = master:GetChild("P"..side.."SubmitText")
 
-			-- If only one player is joined, we then need to update both panes with only
-			-- one players' data.
-			local side = i
-			if data and GAMESTATE:GetNumSidesJoined() == 1 then
-				if data["player1"] then
-					side = 1
-				else
-					side = 2
+		if not playerData or playerData["error"] then
+			-- The server rejected this player's submission (e.g. revoked API key).
+			if submitText then submitText:queuecommand("SubmitFailed") end
+			if popup then popup:playcommand("Failed", { side=side, text=THEME:GetString("ECFACloud", "SubmitFailed") }) end
+		else
+			succeeded[side] = submitted.player
+			if submitText then submitText:queuecommand("Submit") end
+
+			-- The QR pane stops offering to submit (both of its sides in single player).
+			for i = 1, 2 do
+				local qr = panes and panes:GetChild("Pane7_SideP"..i)
+				qr = qr and qr:GetChild("")
+				if qr and (i == side or GAMESTATE:GetNumSidesJoined() == 1) then
+					qr:GetChild("HelpText"):settext(THEME:GetString("ECFACloud", "ScoreAlreadySubmitted"))
 				end
-				playerStr = "player"..side
 			end
 
-			local submitText = (side == 1) and P1SubmitText or P2SubmitText
-			local playerData = data and data[playerStr]
+			-- ECFA Events results for this play (empty when the chart isn't in an open event).
+			ShowEventSummary(master, side, playerData["events"])
 
-			if playerData and playerData["error"] then
-				-- The server rejected this player's submission (e.g. revoked API key).
-				if ToEnumShortString("PLAYER_P"..i) == "P"..side and submitText then
-					submitText:queuecommand("SubmitFailed")
+			-- Upload any pack/song banners ECFA Cloud doesn't have yet.
+			for hash in ivalues(playerData["missingBanners"] or {}) do
+				if not uploadedBanners[hash] and ctx.bannerPaths[hash] then
+					uploadedBanners[hash] = true
+					UploadBannerToECFACloud(hash, ctx.bannerPaths[hash], ctx.apiKeys[side])
 				end
-			elseif playerData then
-				if ToEnumShortString("PLAYER_P"..i) == "P"..side and ctx.submissions[side] then
-					succeeded[side] = ctx.submissions[side].player
+			end
+
+			-- Only show a leaderboard for the chart that was actually played.
+			local sameChart = SL["P"..side].Streams.Hash == playerData["chartHash"]
+			local personalRank = nil
+			for entry in ivalues(sameChart and playerData["wfLeaderboard"] or {}) do
+				if entry["isSelf"] then personalRank = entry["rank"] end
+			end
+
+			-- Personal best / world record text above the side's stats.
+			if sameChart and (playerData["result"] == "score-added" or playerData["result"] == "improved")
+					and overlay:GetChild("P"..side.."_AF_Upper") then
+				local recordText = master:GetChild("P"..side.."RecordText")
+				local logo = master:GetChild("P"..side.."ECFACloud_Logo")
+				recordText:visible(true)
+				logo:visible(true)
+				recordText:diffuseshift():effectcolor1(Color.White):effectcolor2(Color.Yellow):effectperiod(3)
+				if personalRank == 1 then
+					recordText:settext(THEME:GetString("ECFACloud", "WorldRecord"))
+					PlayRandomSound("Evaluation WR")
+				else
+					recordText:settext(THEME:GetString("ECFACloud", "PersonalBest"))
+					PlayRandomSound("Evaluation PB")
 				end
+				local recordTextXStart = recordText:GetX() - recordText:GetWidth()*recordText:GetZoom()/2
+				local logoWidth = logo:GetWidth()*logo:GetZoom()
+				-- This will automatically adjust based on the length of the recordText length.
+				logo:xy(recordTextXStart - logoWidth/2, recordText:GetY())
+			end
 
-				-- ECFA Events results for this play (empty when the chart isn't in an open event).
-				ShowEventResults(overlay, i, playerData["events"])
-
-				-- Upload any pack/song banners ECFA Cloud doesn't have yet.
-				for hash in ivalues(playerData["missingBanners"] or {}) do
-					if not uploadedBanners[hash] and ctx.bannerPaths[hash] then
-						uploadedBanners[hash] = true
-						UploadBannerToECFACloud(hash, ctx.bannerPaths[hash], ctx.apiKeys[side])
-					end
-				end
-
-				-- And then also ensure that the chart hash matches the currently parsed one.
-				-- It's better to just not display anything than display the wrong scores.
-				if SL["P"..side].Streams.Hash == playerData["chartHash"] then
-					local personalRank = nil
-					local showExScore = SL["P"..side].ActiveModifiers.ShowExScore and playerData["exLeaderboard"]
-
-					local leaderboardData = nil
-					if showExScore then
-						leaderboardData = playerData["exLeaderboard"]
-					elseif playerData["wfLeaderboard"] then
-						leaderboardData = playerData["wfLeaderboard"]
-					end
-
-					if leaderboardData then
-						for entryData in ivalues(leaderboardData) do
-							if entryNum > NumEntries then break end
-							local entry = highScorePane:GetChild("HighScoreList"):GetChild("HighScoreEntry"..entryNum)
-							entry:stoptweening()
-							entry:diffuse(Color.White)
-							SetEntryText(
-								entryData["rank"]..".",
-								GetMachineTag(entryData),
-								string.format("%.2f%%", entryData["score"]/100),
-								ParseECFACloudDate(entryData["date"]),
-								entry
-							)
-
-							-- Highlight EX scores in blue.
-							if showExScore then
-								entry:GetChild("Score"):diffuse(SL.JudgmentColors["ITG"][1])
-							else
-								entry:GetChild("Score"):diffuse(Color.White)
-							end
-
-							if entryData["isRival"] then
-								entry:diffuse(color("#BD94FF"))
-								rivalNum = rivalNum + 1
-							elseif entryData["isSelf"] then
-								entry:diffuse(color("#A1FF94"))
-								personalRank = entryData["rank"]
-							end
-
-							if entryData["isFail"] then
-								entry:GetChild("Score"):diffuse(Color.Red)
-							end
-							entryNum = entryNum + 1
-						end
-
-						-- Empty out any remaining entries.
-						for j=entryNum, NumEntries do
-							local entry = highScorePane:GetChild("HighScoreList"):GetChild("HighScoreEntry"..j)
-							entry:stoptweening()
-							if j == 1 then
-								SetEntryText("", "No Scores", "", "", entry)
-							else
-								SetEntryText("---", "----", "------", "----------", entry)
-							end
-						end
-
-						QRPane:GetChild("HelpText"):settext(THEME:GetString("ECFACloud", "ScoreAlreadySubmitted"))
-						if i == 1 and P1SubmitText then
-							P1SubmitText:queuecommand("Submit")
-						elseif i == 2 and P2SubmitText then
-							P2SubmitText:queuecommand("Submit")
-						end
-					end
-
-					-- Only update PB/WR messages on the side that is joined
-					if ToEnumShortString("PLAYER_P"..i) == "P"..side then
-						local upperPane = overlay:GetChild("P"..side.."_AF_Upper")
-						if upperPane then
-							if playerData["result"] == "score-added" or playerData["result"] == "improved" then
-								local recordText = master:GetChild("P"..side.."RecordText")
-								local logo = master:GetChild("P"..side.."ECFACloud_Logo")
-
-								recordText:visible(true)
-								logo:visible(true)
-								recordText:diffuseshift():effectcolor1(Color.White):effectcolor2(Color.Yellow):effectperiod(3)
-								if personalRank == 1 then
-									local worldRecordText = THEME:GetString("ECFACloud", "WorldRecord")
-									if showExScore then
-										worldRecordText = worldRecordText .. " (EX)"
-									end
-									recordText:settext(worldRecordText)
-									PlayRandomSound("Evaluation WR")
-								else
-									recordText:settext(THEME:GetString("ECFACloud", "PersonalBest"))
-									PlayRandomSound("Evaluation PB")
-								end
-								local recordTextXStart = recordText:GetX() - recordText:GetWidth()*recordText:GetZoom()/2
-								local logoWidth = logo:GetWidth()*logo:GetZoom()
-								-- This will automatically adjust based on the length of the recordText length.
-								logo:xy(recordTextXStart - logoWidth/2, recordText:GetY())
-							end
-						end
-					end
-				end
+			if popup then
+				popup:playcommand("Results", { side=side, data=playerData, personalRank=personalRank, showBoard=sameChart })
 			end
 		end
 	end
@@ -422,6 +318,17 @@ local af = Def.ActorFrame {
 			-- Unjoined players won't have the text displayed.
 			self:GetParent():GetChild("P1SubmitText"):settext(THEME:GetString("ECFACloud", "Submitting"))
 			self:GetParent():GetChild("P2SubmitText"):settext(THEME:GetString("ECFACloud", "Submitting"))
+
+			-- The results window opens now and fills in when ECFA Cloud answers.
+			local overlay = SCREENMAN:GetTopScreen():GetChild("Overlay"):GetChild("ScreenEval Common")
+			local popup = overlay and overlay:GetChild("ECFACloudResults")
+			if popup then
+				local sides = {}
+				for i = 1, 2 do
+					if submissions[i] then sides[#sides+1] = i end
+				end
+				popup:playcommand("Open", { sides=sides })
+			end
 
 			self:playcommand("MakeECFACloudRequest", {
 				endpoint="score-submit?"..NETWORK:EncodeQueryParameters(query),
@@ -495,7 +402,7 @@ for i=1,2 do
 		end,
 	}
 
-	-- e.g. "ECFA 2026 · +521 RP · #3 ▲2" (details are on Pane 9)
+	-- e.g. "ECFA 2026 · Timing #2 · RP #3 ▲2" (details are in the results window)
 	af[#af+1] = LoadFont(ThemePrefs.Get("ThemeFont") .. " Normal").. {
 		Name="P"..i.."EventText",
 		Text="",

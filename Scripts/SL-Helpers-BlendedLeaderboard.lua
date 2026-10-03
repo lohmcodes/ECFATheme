@@ -71,21 +71,56 @@ SamePlayerName = function(a, b)
 	return #wb == #wa + 1 and #wb[#wb] == 1 and #ja >= 3 and table.concat(wb, "", 1, #wa) == ja
 end
 
+-- The player's place in the blended list when their best is below the rows
+-- shown: every listed score that beats it (each player once, as in
+-- BlendLeaderboards), plus the ECFA Cloud scores that beat it but weren't sent
+-- (its ECFA Cloud rank says how many). A service that sent only its top scores,
+-- all of them better, may have more above, so the place is then a minimum
+-- (atLeast, shown as "57+").
+OwnPlace = function(own, kept, lists, requested)
+	local above, ecfaAbove = 0, 0
+	for e in ivalues(kept) do
+		if e.score > own.score then
+			above = above + 1
+			if e.source == "ECFA" then ecfaAbove = ecfaAbove + 1 end
+		end
+	end
+	if own.source == "ECFA" and tonumber(own.sourceRank) then
+		above = above + math.max(0, tonumber(own.sourceRank) - 1 - ecfaAbove)
+	end
+	local atLeast = false
+	for source in ivalues({ "GS", "AC" }) do
+		local list = lists[source]
+		if list and #list >= requested then
+			local lowest = nil
+			for e in ivalues(list) do lowest = math.min(lowest or e.score, e.score) end
+			if lowest and lowest > own.score then atLeast = true end
+		end
+	end
+	return above + 1, atLeast
+end
+
+-- How a blended row's rank reads: "12." or, for a minimum, "57+".
+BlendedRankText = function(entry)
+	if not entry or not entry.rank then return "" end
+	return tostring(entry.rank)..(entry.atLeast and "+" or ".")
+end
+
 -- Merges the sources into one list, best EX first, each entry tagged with its
 -- source. A player appears at most once per service, and a score that another
 -- service already listed for the same player (see SamePlayerName; the dates may
 -- differ, since services record them differently) is listed once, under the
 -- first source in BlendedSources. When none of the player's own scores make the
--- cut, their best takes the last row (without a rank, since their place in the
--- combined list isn't known).
+-- cut, their best takes the last row, ranked by OwnPlace.
 --
 -- lists: { ECFA={entries}, GS={entries}, AC={entries} } (any may be missing)
-BlendLeaderboards = function(lists, maxRows)
+-- requested: how many rows each service was asked for (default maxRows)
+BlendLeaderboards = function(lists, maxRows, requested)
 	local all = {}
 	for source in ivalues(BlendedSources) do
 		for e in ivalues(lists[source.key] or {}) do
 			all[#all+1] = {
-				source=source.key, score=e.score, name=e.name, date=e.date,
+				source=source.key, score=e.score, name=e.name, date=e.date, sourceRank=e.rank,
 				isSelf=e.isSelf, isRival=e.isRival, isFail=e.isFail,
 			}
 		end
@@ -96,7 +131,7 @@ BlendLeaderboards = function(lists, maxRows)
 	end)
 
 	-- listed[score] = the entries kept with that score, to spot the same score from another service
-	local rows, seen, listed, ownBest = {}, {}, {}, nil
+	local rows, seen, listed, kept, ownBest = {}, {}, {}, {}, nil
 	local AlreadyListed = function(e)
 		for kept in ivalues(listed[e.score] or {}) do
 			if kept.source ~= e.source and SamePlayerName(kept.name, e.name) then return true end
@@ -109,6 +144,7 @@ BlendLeaderboards = function(lists, maxRows)
 			seen[id] = true
 			listed[e.score] = listed[e.score] or {}
 			table.insert(listed[e.score], e)
+			kept[#kept+1] = e
 			if #rows < maxRows then
 				e.rank = #rows + 1
 				rows[#rows+1] = e
@@ -121,7 +157,7 @@ BlendLeaderboards = function(lists, maxRows)
 		for e in ivalues(rows) do
 			if e.isSelf then return rows end
 		end
-		ownBest.rank = nil
+		ownBest.rank, ownBest.atLeast = OwnPlace(ownBest, kept, lists, requested or maxRows)
 		rows[#rows] = ownBest
 	end
 	return rows

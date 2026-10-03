@@ -1140,6 +1140,12 @@ UploadBannerToECFACloud = function(hash, path, apiKey)
 		},
 		connectTimeout=15,
 		transferTimeout=60,
-		onResponse=function(response) end,
+		onResponse=function(response)
+			-- In ITGmania's log, so a banner that never shows up on the site can be traced.
+			if response.error or response.statusCode ~= 200 then
+				local why = response.error and ToEnumShortString(response.error) or ("HTTP "..tostring(response.statusCode))
+				Trace(("ECFA Cloud banner upload failed (%s) for %s: %s"):format(why, path, tostring(response.body or ""):sub(1, 200)))
+			end
+		end,
 	}
 end

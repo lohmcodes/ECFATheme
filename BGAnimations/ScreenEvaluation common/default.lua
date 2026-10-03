@@ -1,6 +1,7 @@
 local Players = GAMESTATE:GetHumanPlayers()
--- Pane 9 shows ECFA Cloud event results (only when events are on).
-local NumPanes = 9
+-- ECFA Cloud results (leaderboard, event results) are in a window of their own
+-- (Shared/ECFACloudResults.lua), not a pane.
+local NumPanes = 7
 
 local InputHandler = nil
 
@@ -75,5 +76,8 @@ t[#t+1] = LoadActor("./Panes/default.lua", NumPanes)
 -- The actor that will automatically upload scores to ECFA Cloud.
 -- This is only added in "dance" mode and if the service is available.
 t[#t+1] = LoadActor("./Shared/AutoSubmitScore.lua")
+
+-- The window with the ECFA Cloud results, over everything else.
+t[#t+1] = LoadActor("./Shared/ECFACloudResults.lua")
 
 return t

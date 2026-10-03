@@ -91,7 +91,7 @@ local SetLeaderboardForPlayer = function(player_num, leaderboard, leaderboardDat
 					added[key] = true
 					local entry = leaderboard:GetChild("LeaderboardEntry"..entryNum)
 					SetEntryText(
-						gsEntry["rank"] and (gsEntry["rank"]..".") or "",
+						BlendedRankText(gsEntry),
 						gsEntry["name"],
 						string.format("%.2f%%", gsEntry["score"]/100),
 						blended and FormatBlendedDate(gsEntry["date"]) or ParseECFACloudDate(gsEntry["date"]),
