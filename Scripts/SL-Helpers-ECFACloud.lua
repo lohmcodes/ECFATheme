@@ -1120,15 +1120,42 @@ local HexEncode = function(data)
 	return table.concat(parts)
 end
 
+-- Reads a whole binary file, zero bytes included. RageFile:Read() and ReadBytes()
+-- hand Lua C strings, which end at the first zero byte (so Read() returns just the
+-- 8-byte signature of a PNG). Read up to each zero byte, put the zero back, and
+-- carry on from just past it. Returns nil if the file can't be read.
+ReadBinaryFile = function(path)
+	local size = FILEMAN:GetFileSizeBytes(path)
+	if not size or size <= 0 then return nil end
+	local f = RageFileUtil.CreateRageFile()
+	if not f:Open(path, 1) then
+		f:destroy()
+		return nil
+	end
+	local parts, pos = {}, 0
+	while pos < size do
+		f:Seek(pos)
+		local want = math.min(4096, size - pos)
+		local chunk = f:ReadBytes(want) or ""
+		parts[#parts+1] = chunk
+		pos = pos + #chunk
+		if #chunk < want then
+			-- It stopped at a zero byte.
+			parts[#parts+1] = "\0"
+			pos = pos + 1
+		end
+	end
+	f:Close()
+	f:destroy()
+	return table.concat(parts)
+end
+
 -- Uploads a banner image that ECFA Cloud reported missing after a submission.
 -- It's sent as hex text: ITGmania's HTTP client cuts binary request bodies off
--- at the first zero byte.
+-- at the first zero byte too.
 UploadBannerToECFACloud = function(hash, path, apiKey)
 	if not (hash and path and apiKey) then return end
-	local f = RageFileUtil.CreateRageFile()
-	local data = nil
-	if f:Open(path, 1) then data = f:Read() end
-	f:destroy()
+	local data = ReadBinaryFile(path)
 	if not data or #data == 0 then return end
 	NETWORK:HttpRequest{
 		url=GetECFACloudURL().."/api/v1/banners?encoding=hex&hash="..hash,
