@@ -171,6 +171,10 @@ local RetryQueued = function(master, players)
 end
 
 local AutoSubmitRequestProcessor = function(res, ctx)
+	-- The blended leaderboard pane (Pane8) can load now, with this play on it.
+	for _, submitted in pairs(ctx.submissions) do
+		MESSAGEMAN:Broadcast("ECFACloudBlendedReady", { player=submitted.player })
+	end
 	local overlay = ctx.overlay
 	local master = overlay:GetChild("AutoSubmitMaster")
 	local popup = overlay:GetChild("ECFACloudResults")
@@ -307,11 +311,23 @@ local af = Def.ActorFrame {
 				end
 			end
 
+			-- The blended leaderboard pane (Pane8) loads now for players with nothing to
+			-- submit, and after the submission for the rest (so the new score is on it).
+			for i=1,2 do
+				local player = "PlayerNumber_P"..i
+				if GAMESTATE:IsSideJoined(player) and not submissions[i] then
+					MESSAGEMAN:Broadcast("ECFACloudBlendedReady", { player=player })
+				end
+			end
+
 			if next(submissions) == nil then return end
 
 			if not online then
 				-- ECFA Cloud is enabled but wasn't reachable at the title screen.
 				QueueForLater(self:GetParent(), submissions)
+				for _, submitted in pairs(submissions) do
+					MESSAGEMAN:Broadcast("ECFACloudBlendedReady", { player=submitted.player })
+				end
 				return
 			end
 

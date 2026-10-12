@@ -1,7 +1,7 @@
 local Players = GAMESTATE:GetHumanPlayers()
 -- ECFA Cloud results (leaderboard, event results) are in a window of their own
--- (Shared/ECFACloudResults.lua), not a pane.
-local NumPanes = 7
+-- (Shared/ECFACloudResults.lua); Pane 8 is the blended EX leaderboard.
+local NumPanes = 8
 
 local InputHandler = nil
 

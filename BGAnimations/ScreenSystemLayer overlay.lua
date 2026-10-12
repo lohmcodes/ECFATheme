@@ -480,7 +480,9 @@ t[#t+1] = Def.ActorFrame{
 		Name="Service1",
 		Text="",
 		InitCommand=function(self)
-			self:visible(true):addy(18):horizalign(left)
+			-- Hung from its top, just under the ECFA Cloud line, so a two-line message
+			-- (e.g. Host Blocked) grows downward instead of over it.
+			self:visible(true):y(9):vertalign(top):horizalign(left)
 			DiffuseText(self)
 		end,
 		VisualStyleSelectedMessageCommand=function(self) DiffuseText(self) end,
